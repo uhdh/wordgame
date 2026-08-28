@@ -68,6 +68,7 @@ export const VOWEL_REVERSE_ROTATIONS = {
   'ㅡ': 'ㅣ'
 };
 
+// Combinations are strictly ordered in the sequence they are written
 export const CONSONANT_COMBINATIONS = {
   'ㄱ+ㄱ': 'ㄲ',
   'ㄷ+ㄷ': 'ㄸ',
@@ -125,20 +126,17 @@ export function rotateTile(tile, reverse = false) {
 }
 
 /**
- * Check if two or three tiles can combine
+ * Check if two or three tiles can combine (strictly sequential, directional order)
  * @param {string[]} tiles 
  * @returns {string|null}
  */
 export function combineTiles(tiles) {
   if (!tiles || tiles.length < 2) return null;
   const key2 = `${tiles[0]}+${tiles[1]}`;
-  const key2_rev = `${tiles[1]}+${tiles[0]}`;
 
   if (tiles.length === 2) {
     if (CONSONANT_COMBINATIONS[key2]) return CONSONANT_COMBINATIONS[key2];
-    if (CONSONANT_COMBINATIONS[key2_rev]) return CONSONANT_COMBINATIONS[key2_rev];
     if (VOWEL_COMBINATIONS[key2]) return VOWEL_COMBINATIONS[key2];
-    if (VOWEL_COMBINATIONS[key2_rev]) return VOWEL_COMBINATIONS[key2_rev];
   } else if (tiles.length === 3) {
     const key3 = `${tiles[0]}+${tiles[1]}+${tiles[2]}`;
     if (VOWEL_COMBINATIONS[key3]) return VOWEL_COMBINATIONS[key3];
