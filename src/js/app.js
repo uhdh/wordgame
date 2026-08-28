@@ -414,7 +414,7 @@ function handleSubmitGuess() {
 }
 
 /**
- * Render Guess History (Card Flip animation only plays ONCE upon initial registration)
+ * Render Guess History (Wordle Board with tile-based colors, without assembled word)
  */
 function renderHistory(state) {
   el.historyCount.textContent = `${state.guesses.length}회 제출`;
@@ -453,7 +453,6 @@ function renderHistory(state) {
     row.innerHTML = `
       <div class="history-row-left">
         <span class="history-attempt-num">#${attemptIdx + 1}</span>
-        ${entry.word ? `<span class="history-word-tag">${entry.word}</span>` : ''}
         <div class="history-tiles-box">
           ${tilesHtml}
         </div>
