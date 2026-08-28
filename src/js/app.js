@@ -414,7 +414,7 @@ function handleSubmitGuess() {
 }
 
 /**
- * Render Guess History (Wordle Board with tile-based colors)
+ * Render Guess History (Card Flip animation only plays ONCE upon initial registration)
  */
 function renderHistory(state) {
   el.historyCount.textContent = `${state.guesses.length}회 제출`;
@@ -435,15 +435,20 @@ function renderHistory(state) {
     const row = document.createElement('div');
     row.className = 'history-row';
 
+    // Animation should only trigger when the entry is freshly created (first render)
+    const shouldAnimate = !entry.hasAnimated;
+
     const tilesHtml = entry.tiles.map((tileChar, tileIdx) => {
       const status = entry.feedback[tileIdx] || 'absent';
-      const isLatest = attemptIdx === state.guesses.length - 1;
       return `
-        <div class="history-tile-card status-${status} ${isLatest ? 'flip-anim' : ''}" style="animation-delay: ${tileIdx * 0.04}s">
+        <div class="history-tile-card status-${status} ${shouldAnimate ? 'flip-anim' : ''}" style="${shouldAnimate ? `animation-delay: ${tileIdx * 0.04}s;` : ''}">
           ${tileChar}
         </div>
       `;
     }).join('');
+
+    // Mark that this entry has performed its initial registration animation
+    entry.hasAnimated = true;
 
     row.innerHTML = `
       <div class="history-row-left">
