@@ -1,5 +1,5 @@
 /**
- * <언어의 조각> Application Controller (100 Stages, Chosung Hints, Rotatable-Only Buttons, Click/Drag Swap)
+ * <언어의 조각> Application Controller (Mobile Optimized, Touch Drag & Drop, Click-to-Swap, 100 Stages)
  */
 
 import { gameState } from './gameState.js';
@@ -17,6 +17,7 @@ const el = {
   stageHintBox: document.getElementById('stageHintBox'),
   stageHintText: document.getElementById('stageHintText'),
   previewWordBoxes: document.getElementById('previewWordBoxes'),
+  tilesTrackContainer: document.getElementById('tilesTrackContainer'),
   tilesTrack: document.getElementById('tilesTrack'),
   btnShuffleTiles: document.getElementById('btnShuffleTiles'),
   btnResetTiles: document.getElementById('btnResetTiles'),
@@ -43,9 +44,25 @@ const el = {
   confettiCanvas: document.getElementById('confettiCanvas')
 };
 
-// Drag & Drop State
+// Drag & Drop / Touch State
 let draggedIndex = null;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchActiveTile = null;
 let currentStageFilter = 'all';
+
+/**
+ * Haptic Vibration Helper
+ */
+function triggerHaptic(pattern = 10) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate(pattern);
+    } catch (e) {
+      // Ignore vibration errors if not supported
+    }
+  }
+}
 
 /**
  * Initialize Application
@@ -68,18 +85,21 @@ function bindEvents() {
 
   // Shuffle Tiles
   el.btnShuffleTiles.addEventListener('click', () => {
+    triggerHaptic(15);
     sound.playTileRotate();
     gameState.shuffleTiles();
   });
 
   // Reset Tiles
   el.btnResetTiles.addEventListener('click', () => {
+    triggerHaptic(15);
     sound.playTileClick();
     gameState.resetTiles();
   });
 
   // Hint Toggle
   el.btnToggleHint.addEventListener('click', () => {
+    triggerHaptic(10);
     sound.playTileClick();
     el.stageHintBox.classList.toggle('hidden');
   });
@@ -88,15 +108,18 @@ function bindEvents() {
   el.btnSound.addEventListener('click', () => {
     const isMuted = sound.toggleMute();
     updateSoundIcon();
+    triggerHaptic(10);
     if (!isMuted) sound.playTileClick();
   });
 
   // Rules Modal
   el.btnRules.addEventListener('click', () => {
+    triggerHaptic(10);
     sound.playTileClick();
     el.rulesModal.classList.remove('hidden');
   });
   el.btnCloseRules.addEventListener('click', () => {
+    triggerHaptic(10);
     sound.playTileClick();
     el.rulesModal.classList.add('hidden');
   });
@@ -106,11 +129,13 @@ function bindEvents() {
 
   // Stage Select Modal
   el.btnStageSelect.addEventListener('click', () => {
+    triggerHaptic(10);
     sound.playTileClick();
     renderStageSelectGrid();
     el.stageSelectModal.classList.remove('hidden');
   });
   el.btnCloseStageSelect.addEventListener('click', () => {
+    triggerHaptic(10);
     sound.playTileClick();
     el.stageSelectModal.classList.add('hidden');
   });
@@ -121,6 +146,7 @@ function bindEvents() {
   // Stage Filter Tabs
   document.querySelectorAll('.stage-filter-tabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      triggerHaptic(10);
       sound.playTileClick();
       document.querySelectorAll('.stage-filter-tabs .tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -131,12 +157,14 @@ function bindEvents() {
 
   // Next Round & Restart Buttons
   el.btnNextRound.addEventListener('click', () => {
+    triggerHaptic(20);
     sound.playTileClick();
     el.roundClearModal.classList.add('hidden');
     gameState.nextRound();
   });
 
   el.btnRestartGame.addEventListener('click', () => {
+    triggerHaptic(20);
     sound.playTileClick();
     el.gameOverModal.classList.add('hidden');
     gameState.startNewGame();
@@ -181,7 +209,7 @@ function render(state) {
   el.difficultyPill.textContent = level;
   el.difficultyPill.className = `difficulty-pill diff-${level}`;
 
-  el.targetDesc.textContent = `${state.currentPuzzle.length}글자 정답 단어 (${state.currentPuzzle.targetTiles.length}개 타일 조합)`;
+  el.targetDesc.textContent = `${state.currentPuzzle.length}글자 (${state.currentPuzzle.targetTiles.length}개 타일)`;
   el.stageHintText.textContent = state.currentPuzzle.chosungHint;
 
   // Render Assembled Word Preview
@@ -231,7 +259,7 @@ function renderAssembledPreview(state) {
 }
 
 /**
- * Render Draggable Unified 1-Line Tile Row
+ * Render Draggable Unified 1-Line Tile Row (with Mobile Touch Support)
  */
 function renderTilesTrack(state) {
   el.tilesTrack.innerHTML = '';
@@ -248,26 +276,85 @@ function renderTilesTrack(state) {
     card.innerHTML = `
       <span class="tile-index-badge">${index + 1}</span>
       <span class="tile-char-text">${tile.char}</span>
-      ${canRotate ? '<button class="tile-rotate-btn" title="타일 회전 (🔄)">🔄</button>' : ''}
+      ${canRotate ? '<button class="tile-rotate-btn" title="타일 회전 (🔄)" aria-label="회전">🔄</button>' : ''}
     `;
 
-    // Rotate Button (Only rendered on rotatable tiles!)
+    // Rotate Button
     if (canRotate) {
       const rotateBtn = card.querySelector('.tile-rotate-btn');
-      rotateBtn.addEventListener('click', (e) => {
+      const handleRotate = (e) => {
         e.stopPropagation();
+        e.preventDefault();
+        triggerHaptic(12);
         sound.playTileRotate();
         gameState.rotateTileAt(index);
-      });
+      };
+      rotateBtn.addEventListener('click', handleRotate);
+      rotateBtn.addEventListener('touchend', handleRotate);
     }
 
-    // Click on tile card to select / swap
-    card.addEventListener('click', () => {
+    // Tap / Click to select and swap
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.tile-rotate-btn')) return;
+      triggerHaptic(15);
       sound.playTileClick();
       gameState.selectTile(index);
     });
 
-    // Drag and Drop Events
+    // Touch Event Handling for Mobile Drag & Drop
+    card.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.tile-rotate-btn')) return;
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchActiveTile = card;
+      draggedIndex = index;
+    }, { passive: true });
+
+    card.addEventListener('touchmove', (e) => {
+      if (!touchActiveTile || draggedIndex === null) return;
+      const touch = e.touches[0];
+      const deltaX = Math.abs(touch.clientX - touchStartX);
+      const deltaY = Math.abs(touch.clientY - touchStartY);
+
+      // If moving horizontally across tiles, mark dragging
+      if (deltaX > 10 && deltaX > deltaY) {
+        touchActiveTile.classList.add('dragging');
+        const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+        const targetCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
+
+        document.querySelectorAll('.draggable-tile-card').forEach(c => c.classList.remove('drag-over'));
+        if (targetCard && targetCard !== touchActiveTile) {
+          targetCard.classList.add('drag-over');
+        }
+      }
+    }, { passive: true });
+
+    card.addEventListener('touchend', (e) => {
+      if (!touchActiveTile || draggedIndex === null) return;
+      const changedTouch = e.changedTouches[0];
+      const elemBelow = document.elementFromPoint(changedTouch.clientX, changedTouch.clientY);
+      const targetCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
+
+      document.querySelectorAll('.draggable-tile-card').forEach(c => {
+        c.classList.remove('dragging');
+        c.classList.remove('drag-over');
+      });
+
+      if (targetCard) {
+        const targetIndex = parseInt(targetCard.getAttribute('data-index'), 10);
+        if (!isNaN(targetIndex) && targetIndex !== draggedIndex) {
+          triggerHaptic(20);
+          sound.playTileCombine();
+          gameState.moveTile(draggedIndex, targetIndex);
+        }
+      }
+
+      draggedIndex = null;
+      touchActiveTile = null;
+    });
+
+    // HTML5 Desktop Drag and Drop Events
     card.addEventListener('dragstart', (e) => {
       draggedIndex = index;
       card.classList.add('dragging');
@@ -297,6 +384,7 @@ function renderTilesTrack(state) {
       e.preventDefault();
       card.classList.remove('drag-over');
       if (draggedIndex !== null && draggedIndex !== index) {
+        triggerHaptic(20);
         sound.playTileCombine();
         gameState.moveTile(draggedIndex, index);
       }
@@ -312,9 +400,12 @@ function renderTilesTrack(state) {
 function handleSubmitGuess() {
   const guessEntry = gameState.submitGuess();
   if (!guessEntry) {
+    triggerHaptic([40, 40, 40]);
     sound.playError();
     return;
   }
+
+  triggerHaptic([20, 40, 20]);
 
   // Play audio tones for tile flip
   guessEntry.feedback.forEach((status, idx) => {
@@ -331,7 +422,7 @@ function renderHistory(state) {
   if (state.guesses.length === 0) {
     el.historyList.innerHTML = `
       <div class="empty-history-placeholder">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
         <p>타일을 회전하고 배치한 뒤 <strong>[단어 제출]</strong>을 눌러 결과를 확인해보세요!</p>
       </div>
     `;
@@ -348,7 +439,7 @@ function renderHistory(state) {
       const status = entry.feedback[tileIdx] || 'absent';
       const isLatest = attemptIdx === state.guesses.length - 1;
       return `
-        <div class="history-tile-card status-${status} ${isLatest ? 'flip-anim' : ''}" style="animation-delay: ${tileIdx * 0.05}s">
+        <div class="history-tile-card status-${status} ${isLatest ? 'flip-anim' : ''}" style="animation-delay: ${tileIdx * 0.04}s">
           ${tileChar}
         </div>
       `;
@@ -390,11 +481,12 @@ function renderStageSelectGrid() {
     btn.className = `stage-card-btn ${isCurrent ? 'current' : ''}`;
     btn.innerHTML = `
       <span class="stage-card-num">${stage.stage}단계</span>
-      <span class="stage-card-len">${stage.length}글자 단어</span>
+      <span class="stage-card-len">${stage.length}글자</span>
       <span class="stage-card-diff diff-${stage.level}">${stage.level}</span>
     `;
 
     btn.addEventListener('click', () => {
+      triggerHaptic(15);
       sound.playTileClick();
       gameState.loadStage(idx);
       el.stageSelectModal.classList.add('hidden');
@@ -408,6 +500,7 @@ function renderStageSelectGrid() {
  * Show Round Clear Celebration Modal
  */
 function showRoundClearModal(state) {
+  triggerHaptic([50, 60, 50, 60, 100]);
   sound.playWin();
   triggerConfetti();
 
@@ -420,6 +513,7 @@ function showRoundClearModal(state) {
  * Show Final Victory Modal
  */
 function showGameOverModal(state) {
+  triggerHaptic([80, 80, 80, 80, 200]);
   sound.playWin();
   triggerConfetti();
 
@@ -440,13 +534,14 @@ function triggerConfetti() {
   const particles = [];
   const colors = ['#10b981', '#f59e0b', '#ef4444', '#6366f1', '#06b6d4', '#fbbf24', '#ffffff'];
 
-  for (let i = 0; i < 120; i++) {
+  const count = window.innerWidth < 480 ? 70 : 120;
+  for (let i = 0; i < count; i++) {
     particles.push({
       x: canvas.width / 2,
       y: canvas.height / 2,
       vx: (Math.random() - 0.5) * 16,
       vy: (Math.random() - 0.8) * 18,
-      size: Math.random() * 8 + 4,
+      size: Math.random() * 7 + 3,
       color: colors[Math.floor(Math.random() * colors.length)],
       rotation: Math.random() * 360,
       rotSpeed: (Math.random() - 0.5) * 10,
@@ -464,7 +559,7 @@ function triggerConfetti() {
       p.y += p.vy;
       p.vy += 0.35;
       p.rotation += p.rotSpeed;
-      p.opacity -= 0.009;
+      p.opacity -= 0.01;
 
       if (p.opacity > 0) {
         alive = true;
