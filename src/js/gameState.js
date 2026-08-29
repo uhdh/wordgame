@@ -1,23 +1,36 @@
 /**
- * <언어의 조각> Game State Manager (100 Stages, Tile-based Evaluation, Complete Progress Saving)
+ * <언어의 조각> Game State Manager (Normal Fragments Mode & Hardcore Wordle Mode)
+ * Full state persistence, 100 stages, tile-based evaluation, Wordle keypad feedback.
  */
 import { STAGES_100 } from './stages.js';
 import { evaluateTileGuess } from './wordValidator.js';
-import { rotateTile, parseTileStreamToSyllables, isRotatable } from './hangulEngine.js';
+import { rotateTile, parseTileStreamToSyllables, isRotatable, decomposeHangul } from './hangulEngine.js';
 
 export class GameState {
   constructor() {
+    this.gameMode = 'normal'; // 'normal' | 'hardcore'
+
     this.stageIndex = 0;
     this.score = 0;
     this.clearedStages = [];
     this.savedStageState = null;
 
+    // Normal Mode State
     this.currentPuzzle = null;
     this.selectedTileIndex = null;
     this.activeTiles = [];
     this.guesses = [];
     this.isRoundOver = false;
     this.isGameOver = false;
+
+    // Hardcore Wordle Mode State
+    this.hardcoreScore = 0;
+    this.hardcoreClearedStages = [];
+    this.hardcoreGuesses = []; // [{ word, syllables, feedback, isExactMatch }]
+    this.hardcoreInputJamos = []; // ['ㄱ', 'ㅡ', 'ㅁ', ...]
+    this.hardcoreIsRoundOver = false;
+    this.hardcoreIsGameOver = false;
+    this.hardcoreKeyStates = {}; // { 'ㄱ': 'correct' | 'present' | 'absent', ... }
 
     this.listeners = [];
 
@@ -35,10 +48,26 @@ export class GameState {
   }
 
   /**
-   * Load saved progress from localStorage (stage, score, cleared stages, in-progress tiles & guesses)
+   * Switch between Normal (조각 모드) and Hardcore (워들 모드)
+   * @param {'normal' | 'hardcore'} mode 
+   */
+  setGameMode(mode) {
+    if (mode !== 'normal' && mode !== 'hardcore') return;
+    this.gameMode = mode;
+    this.saveProgress();
+    this.notify();
+  }
+
+  /**
+   * Load saved progress from localStorage
    */
   loadSavedProgress() {
     try {
+      const savedMode = localStorage.getItem('wordgame_active_mode');
+      if (savedMode === 'normal' || savedMode === 'hardcore') {
+        this.gameMode = savedMode;
+      }
+
       const saved = localStorage.getItem('wordgame_save_data');
       if (saved) {
         const data = JSON.parse(saved);
@@ -54,8 +83,20 @@ export class GameState {
         if (data.savedStageState && data.savedStageState.stageIndex === this.stageIndex) {
           this.savedStageState = data.savedStageState;
         }
+
+        // Hardcore persistence
+        if (typeof data.hardcoreScore === 'number') {
+          this.hardcoreScore = data.hardcoreScore;
+        }
+        if (Array.isArray(data.hardcoreClearedStages)) {
+          this.hardcoreClearedStages = data.hardcoreClearedStages;
+        }
+        if (data.hardcoreState && data.hardcoreState.stageIndex === this.stageIndex) {
+          this.hardcoreGuesses = Array.isArray(data.hardcoreState.guesses) ? data.hardcoreState.guesses : [];
+          this.hardcoreKeyStates = data.hardcoreState.keyStates || {};
+          this.hardcoreIsRoundOver = !!data.hardcoreState.isRoundOver;
+        }
       } else {
-        // Fallback for legacy keys
         const legacyIndex = parseInt(localStorage.getItem('wordgame_stage_index') || '0', 10);
         if (!isNaN(legacyIndex) && legacyIndex >= 0 && legacyIndex < STAGES_100.length) {
           this.stageIndex = legacyIndex;
@@ -66,12 +107,12 @@ export class GameState {
         }
       }
     } catch (e) {
-      console.warn('Failed to parse saved game progress:', e);
+      console.warn('Failed to parse saved progress:', e);
     }
   }
 
   /**
-   * Save complete progress into localStorage
+   * Save complete progress to localStorage
    */
   saveProgress() {
     try {
@@ -85,9 +126,18 @@ export class GameState {
           guesses: this.guesses,
           isRoundOver: this.isRoundOver
         },
+        hardcoreScore: this.hardcoreScore,
+        hardcoreClearedStages: this.hardcoreClearedStages,
+        hardcoreState: {
+          stageIndex: this.stageIndex,
+          guesses: this.hardcoreGuesses,
+          keyStates: this.hardcoreKeyStates,
+          isRoundOver: this.hardcoreIsRoundOver
+        },
         lastUpdated: Date.now()
       };
       localStorage.setItem('wordgame_save_data', JSON.stringify(data));
+      localStorage.setItem('wordgame_active_mode', this.gameMode);
       localStorage.setItem('wordgame_stage_index', String(this.stageIndex));
       localStorage.setItem('wordgame_score', String(this.score));
     } catch (e) {
@@ -104,6 +154,15 @@ export class GameState {
     this.clearedStages = [];
     this.savedStageState = null;
     this.isGameOver = false;
+
+    this.hardcoreScore = 0;
+    this.hardcoreClearedStages = [];
+    this.hardcoreGuesses = [];
+    this.hardcoreInputJamos = [];
+    this.hardcoreKeyStates = {};
+    this.hardcoreIsRoundOver = false;
+    this.hardcoreIsGameOver = false;
+
     this.saveProgress();
     this.loadStage(0, true);
   }
@@ -111,11 +170,12 @@ export class GameState {
   /**
    * Load stage by index (0 ~ 99)
    * @param {number} index 
-   * @param {boolean} forceReset
+   * @param {boolean} forceReset 
    */
   loadStage(index, forceReset = false) {
     if (index >= STAGES_100.length) {
       this.isGameOver = true;
+      this.hardcoreIsGameOver = true;
       this.notify();
       return;
     }
@@ -125,15 +185,15 @@ export class GameState {
   }
 
   /**
-   * Load puzzle (restoring in-progress tiles & attempts if saved)
+   * Load puzzle data
    * @param {object} puzzle 
-   * @param {boolean} forceReset
+   * @param {boolean} forceReset 
    */
   loadPuzzle(puzzle, forceReset = false) {
     this.currentPuzzle = puzzle;
     this.selectedTileIndex = null;
 
-    // Check if we have saved in-progress tiles & guesses for this stage
+    // Normal mode load
     if (
       !forceReset &&
       this.savedStageState &&
@@ -148,7 +208,6 @@ export class GameState {
       this.guesses = [];
       this.isRoundOver = false;
 
-      // Initialize unified single row of tiles (shuffled initially for gameplay)
       const initialTiles = [...puzzle.tiles];
       for (let i = initialTiles.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -162,14 +221,24 @@ export class GameState {
       }));
     }
 
+    // Hardcore mode load
+    if (forceReset) {
+      this.hardcoreGuesses = [];
+      this.hardcoreInputJamos = [];
+      this.hardcoreKeyStates = {};
+      this.hardcoreIsRoundOver = false;
+    } else {
+      this.hardcoreInputJamos = [];
+    }
+
     this.saveProgress();
     this.notify();
   }
 
-  /**
-   * Select a tile for click-to-swap
-   * @param {number} index 
-   */
+  /* =========================================================================
+     NORMAL MODE METHODS
+     ========================================================================= */
+
   selectTile(index) {
     if (index < 0 || index >= this.activeTiles.length) {
       this.selectedTileIndex = null;
@@ -180,20 +249,14 @@ export class GameState {
     if (this.selectedTileIndex === null) {
       this.selectedTileIndex = index;
     } else if (this.selectedTileIndex === index) {
-      this.selectedTileIndex = null; // deselect
+      this.selectedTileIndex = null;
     } else {
-      // Swap the two tiles!
       this.swapTiles(this.selectedTileIndex, index);
       this.selectedTileIndex = null;
     }
     this.notify();
   }
 
-  /**
-   * Swap two tiles at index A and B
-   * @param {number} i 
-   * @param {number} j 
-   */
   swapTiles(i, j) {
     if (i < 0 || i >= this.activeTiles.length || j < 0 || j >= this.activeTiles.length || i === j) return;
     const temp = this.activeTiles[i];
@@ -203,11 +266,6 @@ export class GameState {
     this.notify();
   }
 
-  /**
-   * Reorder tiles by moving tile from fromIndex to toIndex (drag & drop insertion)
-   * @param {number} fromIndex 
-   * @param {number} toIndex 
-   */
   moveTile(fromIndex, toIndex) {
     if (fromIndex < 0 || fromIndex >= this.activeTiles.length) return;
     if (toIndex < 0 || toIndex >= this.activeTiles.length) return;
@@ -219,11 +277,6 @@ export class GameState {
     this.notify();
   }
 
-  /**
-   * Rotate a specific tile at index if rotatable
-   * @param {number} index 
-   * @param {boolean} reverse 
-   */
   rotateTileAt(index, reverse = false) {
     if (index < 0 || index >= this.activeTiles.length) return;
     const tile = this.activeTiles[index];
@@ -233,9 +286,6 @@ export class GameState {
     this.notify();
   }
 
-  /**
-   * Reset tiles to initial base tiles
-   */
   resetTiles() {
     if (!this.currentPuzzle) return;
     this.activeTiles = this.currentPuzzle.tiles.map((char, index) => ({
@@ -248,9 +298,6 @@ export class GameState {
     this.notify();
   }
 
-  /**
-   * Shuffle tiles order
-   */
   shuffleTiles() {
     for (let i = this.activeTiles.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -261,25 +308,16 @@ export class GameState {
     this.notify();
   }
 
-  /**
-   * Get current parsed syllables and assembled word from active tiles
-   */
   getCurrentAssembled() {
     const tileChars = this.activeTiles.map(t => t.char);
     return parseTileStreamToSyllables(tileChars);
   }
 
-  /**
-   * Check if current tile arrangement is ready to submit
-   */
   canSubmit() {
     if (this.isRoundOver || this.isGameOver) return false;
     return this.activeTiles.length === this.currentPuzzle.targetTiles.length;
   }
 
-  /**
-   * Submit current tile arrangement as guess (Tile-based Evaluation)
-   */
   submitGuess() {
     if (!this.canSubmit()) return null;
 
@@ -324,12 +362,178 @@ export class GameState {
     return guessEntry;
   }
 
-  /**
-   * Advance to the next round
-   */
   nextRound() {
     this.savedStageState = null;
+    this.hardcoreGuesses = [];
+    this.hardcoreInputJamos = [];
+    this.hardcoreKeyStates = {};
+    this.hardcoreIsRoundOver = false;
     this.loadStage(this.stageIndex + 1, true);
+  }
+
+  /* =========================================================================
+     HARDCORE WORDLE MODE METHODS
+     ========================================================================= */
+
+  /**
+   * Type a jamo on the Wordle keypad
+   * @param {string} jamo 
+   */
+  typeHardcoreJamo(jamo) {
+    if (this.hardcoreIsRoundOver || this.hardcoreGuesses.length >= 6) return;
+
+    // Check if current assembled syllables already reached target length and full
+    const current = this.getHardcoreCurrentAssembled();
+    const targetLen = this.currentPuzzle.length;
+
+    // Tentatively test adding jamo
+    const testJamos = [...this.hardcoreInputJamos, jamo];
+    const testAssembled = parseTileStreamToSyllables(testJamos);
+
+    // Limit input length to reasonable max jamos or syllables
+    if (testAssembled.syllables.length > targetLen) {
+      return; // already full
+    }
+
+    this.hardcoreInputJamos.push(jamo);
+    this.notify();
+  }
+
+  /**
+   * Delete last typed jamo on the Wordle keypad
+   */
+  deleteHardcoreJamo() {
+    if (this.hardcoreIsRoundOver || this.hardcoreGuesses.length >= 6) return;
+    if (this.hardcoreInputJamos.length > 0) {
+      this.hardcoreInputJamos.pop();
+      this.notify();
+    }
+  }
+
+  /**
+   * Get currently typed assembled word for active row in Hardcore Wordle
+   */
+  getHardcoreCurrentAssembled() {
+    return parseTileStreamToSyllables(this.hardcoreInputJamos);
+  }
+
+  /**
+   * Submit Wordle Guess
+   */
+  submitHardcoreGuess() {
+    if (this.hardcoreIsRoundOver || this.hardcoreGuesses.length >= 6) return null;
+
+    const assembled = this.getHardcoreCurrentAssembled();
+    const targetLen = this.currentPuzzle.length;
+
+    if (assembled.syllables.length !== targetLen) {
+      return null; // incomplete word
+    }
+
+    const targetWord = this.currentPuzzle.answer;
+    const targetSyllables = targetWord.split('');
+    const guessSyllables = assembled.syllables;
+
+    // Wordle syllable-level evaluation
+    const feedback = new Array(targetLen).fill('absent');
+    const remainingCounts = {};
+    for (const s of targetSyllables) {
+      remainingCounts[s] = (remainingCounts[s] || 0) + 1;
+    }
+
+    // 1st Pass: Exact position match (Green)
+    for (let i = 0; i < targetLen; i++) {
+      if (guessSyllables[i] === targetSyllables[i]) {
+        feedback[i] = 'correct';
+        remainingCounts[guessSyllables[i]] -= 1;
+      }
+    }
+
+    // 2nd Pass: Present in word, wrong position (Yellow)
+    for (let i = 0; i < targetLen; i++) {
+      if (feedback[i] === 'correct') continue;
+      const s = guessSyllables[i];
+      if (remainingCounts[s] && remainingCounts[s] > 0) {
+        feedback[i] = 'present';
+        remainingCounts[s] -= 1;
+      } else {
+        feedback[i] = 'absent';
+      }
+    }
+
+    const isExactMatch = feedback.every(f => f === 'correct');
+
+    // Update Virtual Keyboard Key States
+    guessSyllables.forEach((s, idx) => {
+      const { cho, jung, jong, isHangul } = decomposeHangul(s);
+      const status = feedback[idx];
+      const jamosToUpdate = [];
+      if (isHangul) {
+        if (cho) jamosToUpdate.push(cho);
+        if (jung) jamosToUpdate.push(jung);
+        if (jong) jamosToUpdate.push(jong);
+      } else {
+        jamosToUpdate.push(s);
+      }
+
+      jamosToUpdate.forEach(j => {
+        const currentStatus = this.hardcoreKeyStates[j];
+        if (status === 'correct') {
+          this.hardcoreKeyStates[j] = 'correct';
+        } else if (status === 'present') {
+          if (currentStatus !== 'correct') {
+            this.hardcoreKeyStates[j] = 'present';
+          }
+        } else {
+          if (!currentStatus) {
+            this.hardcoreKeyStates[j] = 'absent';
+          }
+        }
+      });
+    });
+
+    const guessEntry = {
+      word: assembled.word,
+      syllables: [...guessSyllables],
+      feedback,
+      isExactMatch,
+      timestamp: Date.now()
+    };
+
+    this.hardcoreGuesses.push(guessEntry);
+    this.hardcoreInputJamos = []; // reset active buffer for next row
+
+    if (isExactMatch) {
+      this.hardcoreIsRoundOver = true;
+      const points = (this.currentPuzzle.points || targetLen) * 2; // Hardcore mode awards 2x points!
+      this.hardcoreScore += points;
+      this.score += points;
+
+      if (!this.hardcoreClearedStages.includes(this.stageIndex)) {
+        this.hardcoreClearedStages.push(this.stageIndex);
+      }
+      if (!this.clearedStages.includes(this.stageIndex)) {
+        this.clearedStages.push(this.stageIndex);
+      }
+    } else if (this.hardcoreGuesses.length >= 6) {
+      this.hardcoreIsRoundOver = true; // failed stage
+    }
+
+    this.saveProgress();
+    this.notify();
+    return guessEntry;
+  }
+
+  /**
+   * Retry Hardcore Stage on defeat
+   */
+  retryHardcoreStage() {
+    this.hardcoreGuesses = [];
+    this.hardcoreInputJamos = [];
+    this.hardcoreKeyStates = {};
+    this.hardcoreIsRoundOver = false;
+    this.saveProgress();
+    this.notify();
   }
 }
 

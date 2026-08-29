@@ -290,6 +290,56 @@ button {
   transform: translateY(-1px);
 }
 
+/* Mode Switcher Bar */
+.mode-switcher-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 0.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.mode-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mode-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-tab.active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 10px var(--color-accent-glow);
+}
+
+.mode-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.mode-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
 /* ==========================================================================
    Main Content Layout
    ========================================================================== */
@@ -297,6 +347,244 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+}
+
+/* Hardcore Mode Components */
+.hardcore-meta-card {
+  background: var(--bg-surface-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.hardcore-meta-left, .hardcore-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hardcore-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+}
+
+.hardcore-target-desc {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.attempt-counter-pill {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--color-gold);
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+}
+
+/* Wordle 6-Row Board */
+.wordle-board-card {
+  background: var(--bg-surface-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.wordle-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.wordle-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.wordle-row.row-shake {
+  animation: row-shake-anim 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes row-shake-anim {
+  10%, 90% { transform: translateX(-3px); }
+  20%, 80% { transform: translateX(5px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
+
+.wordle-tile {
+  width: 52px;
+  height: 54px;
+  border-radius: var(--radius-sm);
+  background: rgba(30, 41, 59, 0.6);
+  border: 2px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+}
+
+.wordle-tile.filled {
+  border-color: rgba(99, 102, 241, 0.7);
+  background: rgba(30, 41, 59, 0.9);
+  animation: tile-pop 0.15s ease;
+}
+
+.wordle-tile.active-cursor {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+}
+
+@keyframes tile-pop {
+  0% { transform: scale(0.9); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.wordle-tile.status-correct {
+  background: var(--color-green) !important;
+  border-color: #34d399 !important;
+  box-shadow: 0 0 12px var(--color-green-glow) !important;
+}
+
+.wordle-tile.status-present {
+  background: var(--color-yellow) !important;
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 12px var(--color-yellow-glow) !important;
+}
+
+.wordle-tile.status-absent {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #64748b !important;
+}
+
+/* Wordle Keypad */
+.wordle-keypad-card {
+  background: var(--bg-surface-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.4rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.wordle-keypad {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.key-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  width: 100%;
+}
+
+.wordle-key {
+  flex: 1;
+  height: 42px;
+  border-radius: var(--radius-xs);
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: all 0.12s ease;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.wordle-key:active {
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.wordle-key.key-action {
+  flex: 1.4;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: rgba(47, 63, 89, 0.9);
+  letter-spacing: -0.02em;
+}
+
+.wordle-key.key-submit {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: #fff;
+  border-color: #818cf8;
+}
+
+.wordle-key.key-delete {
+  background: rgba(71, 85, 105, 0.8);
+  color: #cbd5e1;
+}
+
+.wordle-key.key-correct {
+  background: var(--color-green) !important;
+  border-color: #34d399 !important;
+  color: #fff !important;
+  box-shadow: 0 0 8px var(--color-green-glow);
+}
+
+.wordle-key.key-present {
+  background: var(--color-yellow) !important;
+  border-color: #fbbf24 !important;
+  color: #fff !important;
+  box-shadow: 0 0 8px var(--color-yellow-glow);
+}
+
+.wordle-key.key-absent {
+  background: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #475569 !important;
+  opacity: 0.55;
+}
+
+.bg-dark {
+  background: #334155;
 }
 
 /* ==========================================================================

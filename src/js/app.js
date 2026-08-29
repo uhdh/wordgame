@@ -1,17 +1,26 @@
 /**
- * <언어의 조각> Application Controller (Mobile Optimized, Touch Drag & Drop, Click-to-Swap, 100 Stages)
+ * <언어의 조각> Application Controller (Mobile Optimized, Touch Drag & Drop, Dual Mode: Normal & Hardcore Wordle)
  */
 
 import { gameState } from './gameState.js';
 import { sound } from './audioEffects.js';
-import { isRotatable } from './hangulEngine.js';
+import { isRotatable, getWordChosungHint, decomposeHangul } from './hangulEngine.js';
 import { STAGES_100 } from './stages.js';
 
 // DOM Elements
 const el = {
+  // Mode Switcher
+  btnModeNormal: document.getElementById('btnModeNormal'),
+  btnModeHardcore: document.getElementById('btnModeHardcore'),
+  normalModeView: document.getElementById('normalModeView'),
+  hardcoreModeView: document.getElementById('hardcoreModeView'),
+
+  // Header & Meta
   roundNumber: document.getElementById('roundNumber'),
   difficultyPill: document.getElementById('difficultyPill'),
   scoreVal: document.getElementById('scoreVal'),
+
+  // Normal Mode Elements
   targetDesc: document.getElementById('targetDesc'),
   btnToggleHint: document.getElementById('btnToggleHint'),
   stageHintBox: document.getElementById('stageHintBox'),
@@ -24,6 +33,20 @@ const el = {
   btnSubmitGuess: document.getElementById('btnSubmitGuess'),
   historyList: document.getElementById('historyList'),
   historyCount: document.getElementById('historyCount'),
+
+  // Hardcore Wordle Mode Elements
+  hardcoreTargetDesc: document.getElementById('hardcoreTargetDesc'),
+  hardcoreAttemptCount: document.getElementById('hardcoreAttemptCount'),
+  btnToggleHardcoreHint: document.getElementById('btnToggleHardcoreHint'),
+  hardcoreHintBox: document.getElementById('hardcoreHintBox'),
+  hardcoreHintText: document.getElementById('hardcoreHintText'),
+  wordleGrid: document.getElementById('wordleGrid'),
+  wordleKeypad: document.getElementById('wordleKeypad'),
+  hardcoreFailModal: document.getElementById('hardcoreFailModal'),
+  hardcoreFailWord: document.getElementById('hardcoreFailWord'),
+  btnRetryHardcore: document.getElementById('btnRetryHardcore'),
+
+  // Modals & Actions
   btnRules: document.getElementById('btnRules'),
   rulesModal: document.getElementById('rulesModal'),
   btnCloseRules: document.getElementById('btnCloseRules'),
@@ -35,6 +58,7 @@ const el = {
   soundIconOn: document.getElementById('soundIconOn'),
   soundIconOff: document.getElementById('soundIconOff'),
   roundClearModal: document.getElementById('roundClearModal'),
+  roundClearTitle: document.getElementById('roundClearTitle'),
   roundClearWord: document.getElementById('roundClearWord'),
   awardedPoints: document.getElementById('awardedPoints'),
   btnNextRound: document.getElementById('btnNextRound'),
@@ -43,6 +67,13 @@ const el = {
   btnRestartGame: document.getElementById('btnRestartGame'),
   confettiCanvas: document.getElementById('confettiCanvas')
 };
+
+// Keypad layout definition for Hardcore Wordle
+const KEYPAD_ROWS = [
+  ['ㅂ', 'ㅈ', 'ㄷ', 'ㄱ', 'ㅅ', 'ㅛ', 'ㅕ', 'ㅑ', 'ㅐ', 'ㅔ'],
+  ['ㅁ', 'ㄴ', 'ㅇ', 'ㄹ', 'ㅎ', 'ㅗ', 'ㅓ', 'ㅏ', 'ㅣ'],
+  ['ENTER', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅊ', 'ㅠ', 'ㅜ', 'ㅡ', 'BACKSPACE']
+];
 
 // Drag & Drop / Touch State
 let draggedIndex = null;
@@ -78,7 +109,20 @@ function init() {
  * Bind DOM Event Listeners
  */
 function bindEvents() {
-  // Submit Guess
+  // Mode Switcher Tabs
+  el.btnModeNormal.addEventListener('click', () => {
+    triggerHaptic(10);
+    sound.playTileClick();
+    gameState.setGameMode('normal');
+  });
+
+  el.btnModeHardcore.addEventListener('click', () => {
+    triggerHaptic(10);
+    sound.playTileClick();
+    gameState.setGameMode('hardcore');
+  });
+
+  // Normal Submit Guess
   el.btnSubmitGuess.addEventListener('click', () => {
     handleSubmitGuess();
   });
@@ -97,11 +141,17 @@ function bindEvents() {
     gameState.resetTiles();
   });
 
-  // Hint Toggle
+  // Hint Toggles
   el.btnToggleHint.addEventListener('click', () => {
     triggerHaptic(10);
     sound.playTileClick();
     el.stageHintBox.classList.toggle('hidden');
+  });
+
+  el.btnToggleHardcoreHint.addEventListener('click', () => {
+    triggerHaptic(10);
+    sound.playTileClick();
+    el.hardcoreHintBox.classList.toggle('hidden');
   });
 
   // Sound Toggle
@@ -163,6 +213,13 @@ function bindEvents() {
     gameState.nextRound();
   });
 
+  el.btnRetryHardcore.addEventListener('click', () => {
+    triggerHaptic(20);
+    sound.playTileClick();
+    el.hardcoreFailModal.classList.add('hidden');
+    gameState.retryHardcoreStage();
+  });
+
   el.btnRestartGame.addEventListener('click', () => {
     triggerHaptic(20);
     sound.playTileClick();
@@ -170,15 +227,54 @@ function bindEvents() {
     gameState.startNewGame();
   });
 
-  // Global Keyboard Shortcuts
+  // Global Keyboard Shortcuts (Physical Keyboard support)
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      if (!el.roundClearModal.classList.contains('hidden')) {
-        el.btnNextRound.click();
-      } else if (!el.gameOverModal.classList.contains('hidden')) {
-        el.btnRestartGame.click();
-      } else if (gameState.canSubmit()) {
+    if (!el.roundClearModal.classList.contains('hidden')) {
+      if (e.key === 'Enter') el.btnNextRound.click();
+      return;
+    }
+    if (!el.hardcoreFailModal.classList.contains('hidden')) {
+      if (e.key === 'Enter') el.btnRetryHardcore.click();
+      return;
+    }
+    if (!el.gameOverModal.classList.contains('hidden')) {
+      if (e.key === 'Enter') el.btnRestartGame.click();
+      return;
+    }
+
+    // Normal Mode Shortcuts
+    if (gameState.gameMode === 'normal') {
+      if (e.key === 'Enter' && gameState.canSubmit()) {
         handleSubmitGuess();
+      }
+    }
+    // Hardcore Mode Keyboard Support
+    else if (gameState.gameMode === 'hardcore') {
+      if (e.key === 'Enter') {
+        handleHardcoreSubmit();
+      } else if (e.key === 'Backspace') {
+        triggerHaptic(10);
+        sound.playTileClick();
+        gameState.deleteHardcoreJamo();
+      } else if (e.key.length === 1) {
+        // Check if Korean Jamo or Hangul Syllable
+        const char = e.key;
+        const { cho, jung, jong, isHangul } = decomposeHangul(char);
+        if (isHangul) {
+          triggerHaptic(10);
+          sound.playTileClick();
+          if (cho) gameState.typeHardcoreJamo(cho);
+          if (jung) gameState.typeHardcoreJamo(jung);
+          if (jong) gameState.typeHardcoreJamo(jong);
+        } else {
+          // Direct Jamo key check (e.g. 'ㄱ', 'ㅏ')
+          const jamos = 'ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅍㅊㅠㅜㅡ';
+          if (jamos.includes(char)) {
+            triggerHaptic(10);
+            sound.playTileClick();
+            gameState.typeHardcoreJamo(char);
+          }
+        }
       }
     }
   });
@@ -201,60 +297,69 @@ function updateSoundIcon() {
 function render(state) {
   if (!state.currentPuzzle) return;
 
-  // Header & Info Updates
+  // Header Stage & Difficulty
   el.roundNumber.textContent = state.stageIndex + 1;
   el.scoreVal.textContent = `${state.score}점`;
-  
+
   const level = state.currentPuzzle.level || '쉬움';
   el.difficultyPill.textContent = level;
   el.difficultyPill.className = `difficulty-pill diff-${level}`;
 
+  // Mode Switcher Active Tab Toggle
+  if (state.gameMode === 'normal') {
+    el.btnModeNormal.classList.add('active');
+    el.btnModeHardcore.classList.remove('active');
+    el.normalModeView.classList.remove('hidden');
+    el.hardcoreModeView.classList.add('hidden');
+    renderNormalMode(state);
+  } else {
+    el.btnModeNormal.classList.remove('active');
+    el.btnModeHardcore.classList.add('active');
+    el.normalModeView.classList.add('hidden');
+    el.hardcoreModeView.classList.remove('hidden');
+    renderHardcoreMode(state);
+  }
+}
+
+/* =========================================================================
+   NORMAL MODE RENDER
+   ========================================================================= */
+
+function renderNormalMode(state) {
   el.targetDesc.textContent = `${state.currentPuzzle.length}글자 (${state.currentPuzzle.targetTiles.length}개 타일)`;
-  el.stageHintText.textContent = state.currentPuzzle.chosungHint;
+  el.stageHintText.textContent = getWordChosungHint(state.currentPuzzle.answer);
 
-  // Render Assembled Word Preview
   renderAssembledPreview(state);
-
-  // Render Draggable 1-Line Tile Row
   renderTilesTrack(state);
-
-  // Render History List
   renderHistory(state);
 
-  // Submit button state
   el.btnSubmitGuess.disabled = !state.canSubmit();
 
-  // Check Round Clear or Game Victory
   if (state.isRoundOver && !state.isGameOver) {
-    showRoundClearModal(state);
-  } else if (state.isGameOver) {
+    const lastGuess = state.guesses[state.guesses.length - 1];
+    if (lastGuess && lastGuess.isExactMatch && el.roundClearModal.classList.contains('hidden')) {
+      showRoundClearModal(state);
+    }
+  }
+
+  if (state.isGameOver && el.gameOverModal.classList.contains('hidden')) {
     showGameOverModal(state);
   }
 }
 
-/**
- * Render Live Assembled Word Preview
- */
 function renderAssembledPreview(state) {
   const assembled = state.getCurrentAssembled();
   el.previewWordBoxes.innerHTML = '';
 
   const targetLen = state.currentPuzzle.length;
-  for (let i = 0; i < targetLen; i++) {
-    const char = assembled.syllables[i] || '';
-    const box = document.createElement('div');
-    box.className = `preview-char-box ${char ? 'filled' : ''}`;
-    box.textContent = char || '?';
-    el.previewWordBoxes.appendChild(box);
-  }
+  const syllables = assembled.syllables || [];
 
-  if (assembled.syllables.length > targetLen) {
-    for (let i = targetLen; i < assembled.syllables.length; i++) {
-      const box = document.createElement('div');
-      box.className = 'preview-char-box filled';
-      box.textContent = assembled.syllables[i];
-      el.previewWordBoxes.appendChild(box);
-    }
+  for (let i = 0; i < targetLen; i++) {
+    const box = document.createElement('div');
+    const char = syllables[i] || '';
+    box.className = `preview-syllable-box ${char ? 'filled' : ''}`;
+    box.textContent = char;
+    el.previewWordBoxes.appendChild(box);
   }
 }
 
@@ -269,7 +374,6 @@ function clearInsertionStyles() {
 
 /**
  * Calculate the target placement based on cursor / touch coordinates.
- * Seamlessly handles dragging to the start, end, between tiles, gaps, and surrounding margins.
  */
 function getDropPlacement(clientX, clientY, draggedIndex) {
   const cards = Array.from(document.querySelectorAll('.draggable-tile-card'));
@@ -279,7 +383,6 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
   if (!trackContainer) return null;
   const containerRect = trackContainer.getBoundingClientRect();
 
-  // Allow generous drag margin around the track (up to 100px outside)
   if (
     clientY < containerRect.top - 100 ||
     clientY > containerRect.bottom + 100 ||
@@ -294,7 +397,7 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
   const firstRect = firstCard.getBoundingClientRect();
   const lastRect = lastCard.getBoundingClientRect();
 
-  // 1. Clearly before first card (left/top of first row) -> insert at index 0 (very start)
+  // 1. Clearly before first card -> insert at 0
   if (clientY <= firstRect.bottom + 10 && clientX < firstRect.left + 20) {
     return {
       targetCard: firstCard,
@@ -304,7 +407,7 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
     };
   }
 
-  // 2. Clearly after the last tile (right of last tile, below last row, or right empty space of row) -> insert at last index (very end)
+  // 2. Clearly after last card -> insert at last index
   if (
     (clientY >= lastRect.top - 15 && clientX > lastRect.right - 20) ||
     clientY > lastRect.bottom + 5
@@ -341,7 +444,7 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
     };
   }
 
-  // 4. Proximity fallback: Find geometrically closest card
+  // 4. Proximity fallback
   let closestCard = null;
   let minDistance = Infinity;
 
@@ -379,7 +482,7 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
 }
 
 /**
- * Render Draggable Unified Tile Row (with Mobile Touch & Boundary/Insertion Support)
+ * Render Draggable Unified Tile Row
  */
 function renderTilesTrack(state) {
   el.tilesTrack.innerHTML = '';
@@ -421,7 +524,7 @@ function renderTilesTrack(state) {
       gameState.selectTile(index);
     });
 
-    // Touch Event Handling for Mobile Drag & Drop (supports boundary & between-tile insertion)
+    // Touch Event Handling for Mobile Drag & Drop
     card.addEventListener('touchstart', (e) => {
       if (e.target.closest('.tile-rotate-btn')) return;
       const touch = e.touches[0];
@@ -511,28 +614,21 @@ function renderTilesTrack(state) {
   });
 }
 
-/**
- * Handle Submit Guess
- */
 function handleSubmitGuess() {
   const guessEntry = gameState.submitGuess();
   if (!guessEntry) {
     triggerHaptic([40, 40, 40]);
-    sound.playError();
     return;
   }
 
-  triggerHaptic([20, 40, 20]);
-
-  // Play audio tones for tile flip
-  guessEntry.feedback.forEach((status, idx) => {
-    sound.playFlip(status, idx);
-  });
+  triggerHaptic(30);
+  if (guessEntry.isExactMatch) {
+    sound.playRoundWin();
+  } else {
+    sound.playTileCombine();
+  }
 }
 
-/**
- * Render Guess History (Wordle Board with tile-based colors, newest on top, max 5 entries)
- */
 function renderHistory(state) {
   el.historyCount.textContent = `${state.guesses.length}회 제출`;
 
@@ -540,37 +636,31 @@ function renderHistory(state) {
     el.historyList.innerHTML = `
       <div class="empty-history-placeholder">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
-        <p>타일을 회전하고 배치한 뒤 <strong>[단어 제출]</strong>을 눌러 결과를 확인해보세요!</p>
+        <p>타일을 회전하고 배치한 뒤 <strong>[단어 제출]</strong>을 눌러보세요!</p>
       </div>
     `;
     return;
   }
 
   el.historyList.innerHTML = '';
+  const MAX_HISTORY_ITEMS = 5;
+  const recentGuesses = state.guesses.slice(-MAX_HISTORY_ITEMS).reverse();
 
-  // Get the last 5 guesses, reversed so that the newest one is at the top
-  const recentGuesses = state.guesses
-    .map((entry, idx) => ({ entry, attemptNum: idx + 1 }))
-    .slice(-5)
-    .reverse();
-
-  recentGuesses.forEach(({ entry, attemptNum }) => {
+  recentGuesses.forEach((entry) => {
+    const attemptNum = state.guesses.indexOf(entry) + 1;
     const row = document.createElement('div');
-    row.className = 'history-row';
+    const isNew = !entry.hasAnimated;
+    row.className = `history-item ${isNew ? 'new-history-entry' : ''}`;
 
-    // Animation should only trigger when the entry is freshly created (first render)
-    const shouldAnimate = !entry.hasAnimated;
-
-    const tilesHtml = entry.tiles.map((tileChar, tileIdx) => {
-      const status = entry.feedback[tileIdx] || 'absent';
+    const tilesHtml = entry.tiles.map((tile, i) => {
+      const status = entry.feedback[i];
       return `
-        <div class="history-tile-card status-${status} ${shouldAnimate ? 'flip-anim' : ''}" style="${shouldAnimate ? `animation-delay: ${tileIdx * 0.04}s;` : ''}">
-          ${tileChar}
+        <div class="history-chip ${status}" title="${tile}">
+          <span class="chip-char">${tile}</span>
         </div>
       `;
     }).join('');
 
-    // Mark that this entry has performed its initial registration animation
     entry.hasAnimated = true;
 
     row.innerHTML = `
@@ -584,9 +674,154 @@ function renderHistory(state) {
   });
 }
 
-/**
- * Render Stage Select Grid
- */
+/* =========================================================================
+   HARDCORE WORDLE MODE RENDER
+   ========================================================================= */
+
+function renderHardcoreMode(state) {
+  const targetLen = state.currentPuzzle.length;
+  el.hardcoreTargetDesc.textContent = `${targetLen}글자 단어 추리`;
+  el.hardcoreAttemptCount.textContent = `시도 ${Math.min(state.hardcoreGuesses.length + 1, 6)} / 6`;
+  el.hardcoreHintText.textContent = getWordChosungHint(state.currentPuzzle.answer);
+
+  renderWordleGrid(state);
+  renderWordleKeypad(state);
+
+  // Check victory / failure conditions
+  if (state.hardcoreIsRoundOver) {
+    const lastGuess = state.hardcoreGuesses[state.hardcoreGuesses.length - 1];
+    if (lastGuess && lastGuess.isExactMatch && el.roundClearModal.classList.contains('hidden')) {
+      showRoundClearModal(state, true);
+    } else if (state.hardcoreGuesses.length >= 6 && !lastGuess.isExactMatch && el.hardcoreFailModal.classList.contains('hidden')) {
+      showHardcoreFailModal(state);
+    }
+  }
+}
+
+function renderWordleGrid(state) {
+  el.wordleGrid.innerHTML = '';
+  const targetLen = state.currentPuzzle.length;
+  const currentTypedSyllables = state.getHardcoreCurrentAssembled().syllables || [];
+  const numGuesses = state.hardcoreGuesses.length;
+
+  for (let r = 0; r < 6; r++) {
+    const row = document.createElement('div');
+    row.className = 'wordle-row';
+    row.id = `wordleRow-${r}`;
+
+    if (r < numGuesses) {
+      // Completed Guess Row
+      const guess = state.hardcoreGuesses[r];
+      for (let c = 0; c < targetLen; c++) {
+        const tile = document.createElement('div');
+        const status = guess.feedback[c] || 'absent';
+        tile.className = `wordle-tile status-${status}`;
+        tile.textContent = guess.syllables[c] || '';
+        row.appendChild(tile);
+      }
+    } else if (r === numGuesses && !state.hardcoreIsRoundOver) {
+      // Active In-Progress Row
+      for (let c = 0; c < targetLen; c++) {
+        const tile = document.createElement('div');
+        const char = currentTypedSyllables[c] || '';
+        const isCursor = c === currentTypedSyllables.length;
+        tile.className = `wordle-tile ${char ? 'filled' : ''} ${isCursor ? 'active-cursor' : ''}`;
+        tile.textContent = char;
+        row.appendChild(tile);
+      }
+    } else {
+      // Empty Future Row
+      for (let c = 0; c < targetLen; c++) {
+        const tile = document.createElement('div');
+        tile.className = 'wordle-tile';
+        tile.textContent = '';
+        row.appendChild(tile);
+      }
+    }
+
+    el.wordleGrid.appendChild(row);
+  }
+}
+
+function renderWordleKeypad(state) {
+  el.wordleKeypad.innerHTML = '';
+
+  KEYPAD_ROWS.forEach(rowKeys => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'key-row';
+
+    rowKeys.forEach(key => {
+      const btn = document.createElement('button');
+      if (key === 'ENTER') {
+        btn.className = 'wordle-key key-action key-submit';
+        btn.innerHTML = '↵ 제출';
+        btn.addEventListener('click', () => {
+          handleHardcoreSubmit();
+        });
+      } else if (key === 'BACKSPACE') {
+        btn.className = 'wordle-key key-action key-delete';
+        btn.innerHTML = '⌫';
+        btn.addEventListener('click', () => {
+          triggerHaptic(10);
+          sound.playTileClick();
+          gameState.deleteHardcoreJamo();
+        });
+      } else {
+        const status = state.hardcoreKeyStates[key];
+        btn.className = `wordle-key ${status ? 'key-' + status : ''}`;
+        btn.textContent = key;
+        btn.setAttribute('data-key', key);
+        btn.addEventListener('click', () => {
+          triggerHaptic(10);
+          sound.playTileClick();
+          gameState.typeHardcoreJamo(key);
+        });
+      }
+      rowEl.appendChild(btn);
+    });
+
+    el.wordleKeypad.appendChild(rowEl);
+  });
+}
+
+function handleHardcoreSubmit() {
+  const targetLen = gameState.currentPuzzle.length;
+  const assembled = gameState.getHardcoreCurrentAssembled();
+
+  if (!assembled || assembled.syllables.length !== targetLen) {
+    // Shake active row
+    const activeRowIndex = gameState.hardcoreGuesses.length;
+    const rowEl = document.getElementById(`wordleRow-${activeRowIndex}`);
+    if (rowEl) {
+      rowEl.classList.remove('row-shake');
+      void rowEl.offsetWidth; // trigger reflow
+      rowEl.classList.add('row-shake');
+    }
+    triggerHaptic([40, 40, 40]);
+    return;
+  }
+
+  const guessEntry = gameState.submitHardcoreGuess();
+  if (!guessEntry) return;
+
+  triggerHaptic(30);
+  if (guessEntry.isExactMatch) {
+    sound.playRoundWin();
+  } else {
+    sound.playTileCombine();
+  }
+}
+
+function showHardcoreFailModal(state) {
+  triggerHaptic([60, 60, 60]);
+  el.hardcoreFailWord.textContent = `정답 단어: "${state.currentPuzzle.answer}"`;
+  el.hardcoreFailModal.classList.remove('hidden');
+}
+
+/* =========================================================================
+   COMMON MODALS & STAGE SELECT
+   ========================================================================= */
+
 function renderStageSelectGrid() {
   el.stagesGrid.innerHTML = '';
 
@@ -615,35 +850,26 @@ function renderStageSelectGrid() {
   });
 }
 
-/**
- * Show Round Clear Celebration Modal
- */
-function showRoundClearModal(state) {
+function showRoundClearModal(state, isHardcore = false) {
   triggerHaptic([50, 60, 50, 60, 100]);
-  sound.playWin();
   triggerConfetti();
 
+  const points = (state.currentPuzzle.points || state.currentPuzzle.length) * (isHardcore ? 2 : 1);
+  el.roundClearTitle.textContent = isHardcore ? '🔥 하드코어 워들 클리어!' : '🎉 정답입니다!';
   el.roundClearWord.textContent = `정답: ${state.currentPuzzle.answer}`;
-  el.awardedPoints.textContent = `+${state.currentPuzzle.points || state.currentPuzzle.length}점`;
+  el.awardedPoints.textContent = `+${points}점 ${isHardcore ? '(2배 보너스)' : ''}`;
+
   el.roundClearModal.classList.remove('hidden');
 }
 
-/**
- * Show Final Victory Modal
- */
 function showGameOverModal(state) {
-  triggerHaptic([80, 80, 80, 80, 200]);
-  sound.playWin();
-  triggerConfetti();
-
+  triggerHaptic([100, 50, 100, 50, 200]);
+  triggerConfetti(true);
   el.finalScoreText.textContent = `${state.score}점`;
   el.gameOverModal.classList.remove('hidden');
 }
 
-/**
- * Confetti Canvas Particle Generator
- */
-function triggerConfetti() {
+function triggerConfetti(extended = false) {
   const canvas = el.confettiCanvas;
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -651,56 +877,55 @@ function triggerConfetti() {
   canvas.height = window.innerHeight;
 
   const particles = [];
-  const colors = ['#10b981', '#f59e0b', '#ef4444', '#6366f1', '#06b6d4', '#fbbf24', '#ffffff'];
+  const count = extended ? 120 : 60;
+  const colors = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#fbbf24', '#f43f5e'];
 
-  const count = window.innerWidth < 480 ? 70 : 120;
   for (let i = 0; i < count; i++) {
     particles.push({
       x: canvas.width / 2,
       y: canvas.height / 2,
       vx: (Math.random() - 0.5) * 16,
-      vy: (Math.random() - 0.8) * 18,
-      size: Math.random() * 7 + 3,
+      vy: (Math.random() - 0.7) * 16,
+      size: Math.random() * 8 + 4,
       color: colors[Math.floor(Math.random() * colors.length)],
       rotation: Math.random() * 360,
-      rotSpeed: (Math.random() - 0.5) * 10,
+      vRot: (Math.random() - 0.5) * 10,
       opacity: 1
     });
   }
 
-  let animationFrame;
-  function update() {
+  let startTime = performance.now();
+  const duration = extended ? 3000 : 1800;
+
+  function animate(now) {
+    const elapsed = now - startTime;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    let alive = false;
 
     particles.forEach(p => {
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.35;
-      p.rotation += p.rotSpeed;
-      p.opacity -= 0.01;
+      p.vy += 0.35; // gravity
+      p.rotation += p.vRot;
+      p.opacity = Math.max(0, 1 - (elapsed / duration));
 
-      if (p.opacity > 0) {
-        alive = true;
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate((p.rotation * Math.PI) / 180);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.opacity;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rotation * Math.PI) / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
     });
 
-    if (alive) {
-      animationFrame = requestAnimationFrame(update);
+    if (elapsed < duration) {
+      requestAnimationFrame(animate);
     } else {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      cancelAnimationFrame(animationFrame);
     }
   }
 
-  update();
+  requestAnimationFrame(animate);
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Start Application
+window.addEventListener('DOMContentLoaded', init);
