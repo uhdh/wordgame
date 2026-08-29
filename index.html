@@ -183,11 +183,14 @@
         </div>
 
         <!-- 2. Wordle 6-Row Guess Board -->
-        <section class="wordle-board-card">
+        <section class="wordle-board-card" id="wordleBoardCard">
           <div class="wordle-grid" id="wordleGrid">
             <!-- 6 Rows generated dynamically based on target word length -->
           </div>
         </section>
+
+        <!-- Hidden Native Mobile Keyboard Proxy Input -->
+        <input type="text" id="mobileWordleInput" class="mobile-hidden-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="한글 키보드 입력">
 
         <!-- 3. Virtual Hangul Wordle Keypad -->
         <section class="wordle-keypad-card">

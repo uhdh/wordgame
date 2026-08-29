@@ -258,6 +258,45 @@ function bindEvents() {
     gameState.startNewGame();
   });
 
+  // Native Mobile Software Keyboard (Samsung, iPhone, Gboard) Integration
+  const mobileInput = document.getElementById('mobileWordleInput');
+  const wordleBoardCard = document.getElementById('wordleBoardCard');
+  if (wordleBoardCard && mobileInput) {
+    wordleBoardCard.addEventListener('click', () => {
+      mobileInput.focus();
+    });
+  }
+
+  if (mobileInput) {
+    mobileInput.addEventListener('input', () => {
+      const val = mobileInput.value;
+      if (!val) return;
+      for (const char of val) {
+        const { cho, jung, jong, isHangul } = decomposeHangul(char);
+        if (isHangul) {
+          if (cho) gameState.typeHardcoreJamo(cho);
+          if (jung) gameState.typeHardcoreJamo(jung);
+          if (jong) gameState.typeHardcoreJamo(jong);
+        } else {
+          const hangulJamos = 'ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅍㅊㅠㅜㅡ';
+          if (hangulJamos.includes(char)) {
+            gameState.typeHardcoreJamo(char);
+          }
+        }
+      }
+      mobileInput.value = '';
+    });
+
+    mobileInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleHardcoreSubmit();
+      } else if (e.key === 'Backspace') {
+        gameState.deleteHardcoreJamo();
+      }
+    });
+  }
+
   // Global Keyboard Shortcuts (Full Physical Keyboard support for QWERTY & Korean)
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -828,27 +867,42 @@ function renderWordleKeypad(state) {
       if (key === 'ENTER') {
         btn.className = 'wordle-key key-action key-submit';
         btn.innerHTML = '↵ 제출';
-        btn.addEventListener('click', () => {
+
+        const handleSubmit = (e) => {
+          if (e.type === 'touchstart') e.preventDefault();
+          highlightActionKey('key-submit');
           handleHardcoreSubmit();
-        });
+        };
+        btn.addEventListener('touchstart', handleSubmit, { passive: false });
+        btn.addEventListener('click', handleSubmit);
       } else if (key === 'BACKSPACE') {
         btn.className = 'wordle-key key-action key-delete';
         btn.innerHTML = '⌫';
-        btn.addEventListener('click', () => {
-          triggerHaptic(10);
+
+        const handleDelete = (e) => {
+          if (e.type === 'touchstart') e.preventDefault();
+          highlightActionKey('key-delete');
+          triggerHaptic(12);
           sound.playTileClick();
           gameState.deleteHardcoreJamo();
-        });
+        };
+        btn.addEventListener('touchstart', handleDelete, { passive: false });
+        btn.addEventListener('click', handleDelete);
       } else {
         const status = state.hardcoreKeyStates[key];
         btn.className = `wordle-key ${status ? 'key-' + status : ''}`;
         btn.textContent = key;
         btn.setAttribute('data-key', key);
-        btn.addEventListener('click', () => {
-          triggerHaptic(10);
+
+        const handleType = (e) => {
+          if (e.type === 'touchstart') e.preventDefault();
+          highlightKeypadButton(key);
+          triggerHaptic(12);
           sound.playTileClick();
           gameState.typeHardcoreJamo(key);
-        });
+        };
+        btn.addEventListener('touchstart', handleType, { passive: false });
+        btn.addEventListener('click', handleType);
       }
       rowEl.appendChild(btn);
     });

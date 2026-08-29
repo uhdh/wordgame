@@ -494,6 +494,18 @@ button {
   color: #64748b !important;
 }
 
+/* Hidden Mobile Input for Native OS Keyboards */
+.mobile-hidden-input {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+}
+
 /* Wordle Keypad */
 .wordle-keypad-card {
   background: var(--bg-surface-card);
@@ -501,14 +513,14 @@ button {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
-  padding: 0.55rem 0.4rem;
+  padding: 0.5rem 0.35rem max(0.5rem, env(safe-area-inset-bottom));
   box-shadow: var(--shadow-sm);
 }
 
 .wordle-keypad {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
   width: 100%;
   max-width: 500px;
   margin: 0 auto;
@@ -518,39 +530,41 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.22rem;
+  gap: 0.25rem;
   width: 100%;
 }
 
 .wordle-key {
   flex: 1;
-  height: 42px;
+  height: 48px;
   border-radius: var(--radius-xs);
   background: rgba(30, 41, 59, 0.85);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
   color: var(--text-primary);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-  transition: all 0.12s ease;
+  transition: transform 0.08s ease, background-color 0.12s ease, border-color 0.12s ease;
   user-select: none;
+  -webkit-user-select: none;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .wordle-key:active, .wordle-key.key-pressed {
-  transform: scale(0.92);
-  background: rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.6) !important;
 }
 
 .wordle-key.key-action {
-  flex: 1.4;
-  font-size: 0.72rem;
-  font-weight: 800;
-  background: rgba(47, 63, 89, 0.9);
+  flex: 1.5;
+  font-size: 0.8rem;
+  font-weight: 900;
+  background: rgba(47, 63, 89, 0.95);
   letter-spacing: -0.02em;
 }
 
@@ -561,7 +575,7 @@ button {
 }
 
 .wordle-key.key-delete {
-  background: rgba(71, 85, 105, 0.8);
+  background: rgba(71, 85, 105, 0.85);
   color: #cbd5e1;
 }
 
