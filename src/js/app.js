@@ -679,8 +679,9 @@ function renderHistory(state) {
    ========================================================================= */
 
 function renderHardcoreMode(state) {
-  const targetLen = state.currentPuzzle.length;
-  el.hardcoreTargetDesc.textContent = `${targetLen}글자 단어 추리`;
+  const numLetters = state.currentPuzzle.length;
+  const numTiles = state.currentPuzzle.targetTiles.length;
+  el.hardcoreTargetDesc.textContent = `${numLetters}글자 (${numTiles}개 타일 추리)`;
   el.hardcoreAttemptCount.textContent = `시도 ${Math.min(state.hardcoreGuesses.length + 1, 6)} / 6`;
   el.hardcoreHintText.textContent = getWordChosungHint(state.currentPuzzle.answer);
 
@@ -700,8 +701,8 @@ function renderHardcoreMode(state) {
 
 function renderWordleGrid(state) {
   el.wordleGrid.innerHTML = '';
-  const targetLen = state.currentPuzzle.length;
-  const currentTypedSyllables = state.getHardcoreCurrentAssembled().syllables || [];
+  const numTiles = state.currentPuzzle.targetTiles.length;
+  const currentTypedTiles = state.hardcoreInputJamos || [];
   const numGuesses = state.hardcoreGuesses.length;
 
   for (let r = 0; r < 6; r++) {
@@ -710,28 +711,29 @@ function renderWordleGrid(state) {
     row.id = `wordleRow-${r}`;
 
     if (r < numGuesses) {
-      // Completed Guess Row
+      // Completed Guess Row (Tile-based)
       const guess = state.hardcoreGuesses[r];
-      for (let c = 0; c < targetLen; c++) {
+      const guessTiles = Array.isArray(guess.tiles) ? guess.tiles : [];
+      for (let c = 0; c < numTiles; c++) {
         const tile = document.createElement('div');
-        const status = guess.feedback[c] || 'absent';
+        const status = (guess.feedback && guess.feedback[c]) || 'absent';
         tile.className = `wordle-tile status-${status}`;
-        tile.textContent = guess.syllables[c] || '';
+        tile.textContent = guessTiles[c] || '';
         row.appendChild(tile);
       }
     } else if (r === numGuesses && !state.hardcoreIsRoundOver) {
-      // Active In-Progress Row
-      for (let c = 0; c < targetLen; c++) {
+      // Active In-Progress Row (Tile-based)
+      for (let c = 0; c < numTiles; c++) {
         const tile = document.createElement('div');
-        const char = currentTypedSyllables[c] || '';
-        const isCursor = c === currentTypedSyllables.length;
+        const char = currentTypedTiles[c] || '';
+        const isCursor = c === currentTypedTiles.length;
         tile.className = `wordle-tile ${char ? 'filled' : ''} ${isCursor ? 'active-cursor' : ''}`;
         tile.textContent = char;
         row.appendChild(tile);
       }
     } else {
       // Empty Future Row
-      for (let c = 0; c < targetLen; c++) {
+      for (let c = 0; c < numTiles; c++) {
         const tile = document.createElement('div');
         tile.className = 'wordle-tile';
         tile.textContent = '';
@@ -785,10 +787,9 @@ function renderWordleKeypad(state) {
 }
 
 function handleHardcoreSubmit() {
-  const targetLen = gameState.currentPuzzle.length;
-  const assembled = gameState.getHardcoreCurrentAssembled();
+  const numTiles = gameState.currentPuzzle.targetTiles.length;
 
-  if (!assembled || assembled.syllables.length !== targetLen) {
+  if (gameState.hardcoreInputJamos.length !== numTiles) {
     // Shake active row
     const activeRowIndex = gameState.hardcoreGuesses.length;
     const rowEl = document.getElementById(`wordleRow-${activeRowIndex}`);

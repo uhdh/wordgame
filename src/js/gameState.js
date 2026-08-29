@@ -1,10 +1,10 @@
 /**
- * <언어의 조각> Game State Manager (Normal Fragments Mode & Hardcore Wordle Mode)
+ * <언어의 조각> Game State Manager (Normal Fragments Mode & Hardcore Wordle Mode - Tile Based)
  * Full state persistence, 100 stages, tile-based evaluation, Wordle keypad feedback.
  */
 import { STAGES_100 } from './stages.js';
 import { evaluateTileGuess } from './wordValidator.js';
-import { rotateTile, parseTileStreamToSyllables, isRotatable, decomposeHangul } from './hangulEngine.js';
+import { rotateTile, parseTileStreamToSyllables, isRotatable } from './hangulEngine.js';
 
 export class GameState {
   constructor() {
@@ -23,10 +23,10 @@ export class GameState {
     this.isRoundOver = false;
     this.isGameOver = false;
 
-    // Hardcore Wordle Mode State
+    // Hardcore Wordle Mode State (Tile-based)
     this.hardcoreScore = 0;
     this.hardcoreClearedStages = [];
-    this.hardcoreGuesses = []; // [{ word, syllables, feedback, isExactMatch }]
+    this.hardcoreGuesses = []; // [{ tiles, word, syllables, feedback, isExactMatch }]
     this.hardcoreInputJamos = []; // ['ㄱ', 'ㅡ', 'ㅁ', ...]
     this.hardcoreIsRoundOver = false;
     this.hardcoreIsGameOver = false;
@@ -92,7 +92,9 @@ export class GameState {
           this.hardcoreClearedStages = data.hardcoreClearedStages;
         }
         if (data.hardcoreState && data.hardcoreState.stageIndex === this.stageIndex) {
-          this.hardcoreGuesses = Array.isArray(data.hardcoreState.guesses) ? data.hardcoreState.guesses : [];
+          const rawGuesses = Array.isArray(data.hardcoreState.guesses) ? data.hardcoreState.guesses : [];
+          // Filter to only valid tile-based guesses
+          this.hardcoreGuesses = rawGuesses.filter(g => g && Array.isArray(g.tiles));
           this.hardcoreKeyStates = data.hardcoreState.keyStates || {};
           this.hardcoreIsRoundOver = !!data.hardcoreState.isRoundOver;
         }
@@ -372,27 +374,19 @@ export class GameState {
   }
 
   /* =========================================================================
-     HARDCORE WORDLE MODE METHODS
+     HARDCORE WORDLE MODE METHODS (TILE-BASED)
      ========================================================================= */
 
   /**
-   * Type a jamo on the Wordle keypad
+   * Type a jamo on the Wordle keypad (Tile-based)
    * @param {string} jamo 
    */
   typeHardcoreJamo(jamo) {
     if (this.hardcoreIsRoundOver || this.hardcoreGuesses.length >= 6) return;
 
-    // Check if current assembled syllables already reached target length and full
-    const current = this.getHardcoreCurrentAssembled();
-    const targetLen = this.currentPuzzle.length;
-
-    // Tentatively test adding jamo
-    const testJamos = [...this.hardcoreInputJamos, jamo];
-    const testAssembled = parseTileStreamToSyllables(testJamos);
-
-    // Limit input length to reasonable max jamos or syllables
-    if (testAssembled.syllables.length > targetLen) {
-      return; // already full
+    const maxTiles = this.currentPuzzle.targetTiles.length;
+    if (this.hardcoreInputJamos.length >= maxTiles) {
+      return; // row is full
     }
 
     this.hardcoreInputJamos.push(jamo);
@@ -418,94 +412,55 @@ export class GameState {
   }
 
   /**
-   * Submit Wordle Guess
+   * Submit Wordle Guess (Tile-based Evaluation)
    */
   submitHardcoreGuess() {
     if (this.hardcoreIsRoundOver || this.hardcoreGuesses.length >= 6) return null;
 
+    const maxTiles = this.currentPuzzle.targetTiles.length;
+    if (this.hardcoreInputJamos.length !== maxTiles) {
+      return null; // incomplete tile row
+    }
+
+    const submittedTiles = [...this.hardcoreInputJamos];
+    const targetTiles = this.currentPuzzle.targetTiles;
+
+    const evalResult = evaluateTileGuess(submittedTiles, targetTiles);
     const assembled = this.getHardcoreCurrentAssembled();
-    const targetLen = this.currentPuzzle.length;
 
-    if (assembled.syllables.length !== targetLen) {
-      return null; // incomplete word
-    }
-
-    const targetWord = this.currentPuzzle.answer;
-    const targetSyllables = targetWord.split('');
-    const guessSyllables = assembled.syllables;
-
-    // Wordle syllable-level evaluation
-    const feedback = new Array(targetLen).fill('absent');
-    const remainingCounts = {};
-    for (const s of targetSyllables) {
-      remainingCounts[s] = (remainingCounts[s] || 0) + 1;
-    }
-
-    // 1st Pass: Exact position match (Green)
-    for (let i = 0; i < targetLen; i++) {
-      if (guessSyllables[i] === targetSyllables[i]) {
-        feedback[i] = 'correct';
-        remainingCounts[guessSyllables[i]] -= 1;
-      }
-    }
-
-    // 2nd Pass: Present in word, wrong position (Yellow)
-    for (let i = 0; i < targetLen; i++) {
-      if (feedback[i] === 'correct') continue;
-      const s = guessSyllables[i];
-      if (remainingCounts[s] && remainingCounts[s] > 0) {
-        feedback[i] = 'present';
-        remainingCounts[s] -= 1;
-      } else {
-        feedback[i] = 'absent';
-      }
-    }
-
-    const isExactMatch = feedback.every(f => f === 'correct');
-
-    // Update Virtual Keyboard Key States
-    guessSyllables.forEach((s, idx) => {
-      const { cho, jung, jong, isHangul } = decomposeHangul(s);
-      const status = feedback[idx];
-      const jamosToUpdate = [];
-      if (isHangul) {
-        if (cho) jamosToUpdate.push(cho);
-        if (jung) jamosToUpdate.push(jung);
-        if (jong) jamosToUpdate.push(jong);
-      } else {
-        jamosToUpdate.push(s);
-      }
-
-      jamosToUpdate.forEach(j => {
-        const currentStatus = this.hardcoreKeyStates[j];
-        if (status === 'correct') {
-          this.hardcoreKeyStates[j] = 'correct';
-        } else if (status === 'present') {
-          if (currentStatus !== 'correct') {
-            this.hardcoreKeyStates[j] = 'present';
-          }
-        } else {
-          if (!currentStatus) {
-            this.hardcoreKeyStates[j] = 'absent';
-          }
+    // Update Virtual Keyboard Key States based on tile evaluation
+    submittedTiles.forEach((tile, idx) => {
+      const status = evalResult.feedback[idx];
+      const currentStatus = this.hardcoreKeyStates[tile];
+      if (status === 'correct') {
+        this.hardcoreKeyStates[tile] = 'correct';
+      } else if (status === 'present') {
+        if (currentStatus !== 'correct') {
+          this.hardcoreKeyStates[tile] = 'present';
         }
-      });
+      } else {
+        if (!currentStatus) {
+          this.hardcoreKeyStates[tile] = 'absent';
+        }
+      }
     });
 
     const guessEntry = {
-      word: assembled.word,
-      syllables: [...guessSyllables],
-      feedback,
-      isExactMatch,
+      tiles: submittedTiles,
+      word: assembled.word || '',
+      syllables: assembled.syllables || [],
+      feedback: evalResult.feedback,
+      summary: evalResult.summary,
+      isExactMatch: evalResult.isExactMatch,
       timestamp: Date.now()
     };
 
     this.hardcoreGuesses.push(guessEntry);
     this.hardcoreInputJamos = []; // reset active buffer for next row
 
-    if (isExactMatch) {
+    if (evalResult.isExactMatch) {
       this.hardcoreIsRoundOver = true;
-      const points = (this.currentPuzzle.points || targetLen) * 2; // Hardcore mode awards 2x points!
+      const points = (this.currentPuzzle.points || this.currentPuzzle.length) * 2; // Hardcore mode awards 2x points!
       this.hardcoreScore += points;
       this.score += points;
 
