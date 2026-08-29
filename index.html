@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-C2WNg2cp.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-D9pfu251.css">
+  <script type="module" crossorigin src="./assets/index-Xofpk5O0.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BFmeeoVv.css">
 </head>
 <body>
   <div id="app" class="game-container">
@@ -54,92 +54,149 @@
       </div>
     </header>
 
+    <!-- Game Mode Switcher Tab Bar -->
+    <nav class="mode-switcher-bar" id="modeSwitcher">
+      <button id="btnModeNormal" class="mode-tab active" data-mode="normal">
+        <span class="mode-icon">🧩</span>
+        <span>조각 모드</span>
+      </button>
+      <button id="btnModeHardcore" class="mode-tab" data-mode="hardcore">
+        <span class="mode-icon">🔥</span>
+        <span>하드코어 워들</span>
+      </button>
+    </nav>
+
     <!-- Main Game Area -->
     <main class="main-content">
-      <!-- 1. Word Target & Assembled Preview Card -->
-      <section class="target-card">
-        <div class="target-card-header">
-          <div class="target-info">
-            <span class="target-badge">정답 목표</span>
-            <span class="target-desc" id="targetDesc">3글자 (9개 타일)</span>
-          </div>
-          <button id="btnToggleHint" class="hint-toggle-btn" title="초성 힌트 확인">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            <span>초성 힌트</span>
-          </button>
-        </div>
-
-        <!-- Chosung Initial Hint Box (Collapsible / Sleek) -->
-        <div class="stage-hint-box hidden" id="stageHintBox">
-          <span class="hint-label">💡 초성:</span>
-          <span class="hint-chosung-text" id="stageHintText">ㄱ ㅁ ㄷ</span>
-        </div>
-
-        <!-- Live Assembled Word Preview Deck -->
-        <div class="assembled-word-preview">
-          <div class="preview-tag">현재 조합된 단어</div>
-          <div class="preview-word-boxes" id="previewWordBoxes">
-            <!-- Dynamically populated assembled syllables -->
-          </div>
-        </div>
-      </section>
-
-      <!-- 2. Draggable & Swappable Tile Rack Card -->
-      <section class="tile-row-card">
-        <div class="tile-row-header">
-          <div class="tile-row-title-wrap">
-            <h2 class="tile-row-title">보유 타일</h2>
-            <span class="tile-row-hint">드래그로 사이 삽입 • 탭 교환 • 🔄 회전</span>
-          </div>
-          <div class="tile-row-actions">
-            <button id="btnShuffleTiles" class="secondary-btn small-btn" title="타일 순서 섞기">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-              <span>섞기</span>
-            </button>
-            <button id="btnResetTiles" class="secondary-btn small-btn" title="초기 상태로 되돌리기">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
-              <span>초기화</span>
+      <!-- ================================================================= -->
+      <!-- VIEW 1: NORMAL FRAGMENTS MODE                                     -->
+      <!-- ================================================================= -->
+      <div id="normalModeView" class="mode-view">
+        <!-- 1. Word Target & Assembled Preview Card -->
+        <section class="target-card">
+          <div class="target-card-header">
+            <div class="target-info">
+              <span class="target-badge">정답 목표</span>
+              <span class="target-desc" id="targetDesc">3글자 (9개 타일)</span>
+            </div>
+            <button id="btnToggleHint" class="hint-toggle-btn" title="초성 힌트 확인">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              <span>초성 힌트</span>
             </button>
           </div>
+
+          <!-- Chosung Initial Hint Box (Collapsible / Sleek) -->
+          <div class="stage-hint-box hidden" id="stageHintBox">
+            <span class="hint-label">💡 초성:</span>
+            <span class="hint-chosung-text" id="stageHintText">ㄱ ㅁ ㄷ</span>
+          </div>
+
+          <!-- Live Assembled Word Preview Deck -->
+          <div class="assembled-word-preview">
+            <div class="preview-tag">현재 조합된 단어</div>
+            <div class="preview-word-boxes" id="previewWordBoxes">
+              <!-- Dynamically populated assembled syllables -->
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Draggable & Swappable Tile Rack Card -->
+        <section class="tile-row-card">
+          <div class="tile-row-header">
+            <div class="tile-row-title-wrap">
+              <h2 class="tile-row-title">보유 타일</h2>
+              <span class="tile-row-hint">드래그로 사이 삽입 • 탭 교환 • 🔄 회전</span>
+            </div>
+            <div class="tile-row-actions">
+              <button id="btnShuffleTiles" class="secondary-btn small-btn" title="타일 순서 섞기">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                <span>섞기</span>
+              </button>
+              <button id="btnResetTiles" class="secondary-btn small-btn" title="초기 상태로 되돌리기">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+                <span>초기화</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Adaptive Smart Tiles Tray -->
+          <div class="tiles-track-container" id="tilesTrackContainer">
+            <div class="tiles-track" id="tilesTrack">
+              <!-- Draggable Tile Chips rendered here -->
+            </div>
+          </div>
+
+          <!-- Submit Button Row -->
+          <div class="submit-action-bar">
+            <button id="btnSubmitGuess" class="primary-btn submit-btn" disabled>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>단어 제출</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 3. Deduction History Board -->
+        <section class="history-section">
+          <div class="history-header">
+            <div class="history-title-wrap">
+              <h2 class="history-title">등록 기록</h2>
+              <span class="history-count" id="historyCount">0회</span>
+            </div>
+            <div class="legend-pills">
+              <span class="legend-pill pill-green"><span class="dot"></span>일치</span>
+              <span class="legend-pill pill-yellow"><span class="dot"></span>포함</span>
+              <span class="legend-pill pill-red"><span class="dot"></span>미사용</span>
+            </div>
+          </div>
+
+          <div class="history-list" id="historyList">
+            <div class="empty-history-placeholder">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
+              <p>타일을 회전하고 배치한 뒤 <strong>[단어 제출]</strong>을 눌러보세요!</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- VIEW 2: HARDCORE WORDLE MODE (타일 없이 키보드로 6회 추리)         -->
+      <!-- ================================================================= -->
+      <div id="hardcoreModeView" class="mode-view hidden">
+        <!-- 1. Hardcore Wordle Meta Card -->
+        <section class="hardcore-meta-card">
+          <div class="hardcore-meta-left">
+            <span class="hardcore-badge">🔥 하드코어 워들</span>
+            <span class="hardcore-target-desc" id="hardcoreTargetDesc">3글자 단어 추리</span>
+          </div>
+          <div class="hardcore-meta-right">
+            <span class="attempt-counter-pill" id="hardcoreAttemptCount">시도 1 / 6</span>
+            <button id="btnToggleHardcoreHint" class="hint-toggle-btn" title="초성 힌트 보기">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              <span>힌트</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Hardcore Chosung Hint Box -->
+        <div class="stage-hint-box hidden" id="hardcoreHintBox">
+          <span class="hint-label">💡 단어 초성:</span>
+          <span class="hint-chosung-text" id="hardcoreHintText">ㄱ ㅁ ㄷ</span>
         </div>
 
-        <!-- Adaptive Smart Tiles Tray (Multi-row/flex grid on mobile, prevents overflow) -->
-        <div class="tiles-track-container" id="tilesTrackContainer">
-          <div class="tiles-track" id="tilesTrack">
-            <!-- Draggable Tile Chips rendered here -->
+        <!-- 2. Wordle 6-Row Guess Board -->
+        <section class="wordle-board-card">
+          <div class="wordle-grid" id="wordleGrid">
+            <!-- 6 Rows generated dynamically based on target word length -->
           </div>
-        </div>
+        </section>
 
-        <!-- Submit Button Row -->
-        <div class="submit-action-bar">
-          <button id="btnSubmitGuess" class="primary-btn submit-btn" disabled>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>단어 제출</span>
-          </button>
-        </div>
-      </section>
-
-      <!-- 3. Deduction History Board -->
-      <section class="history-section">
-        <div class="history-header">
-          <div class="history-title-wrap">
-            <h2 class="history-title">등록 기록</h2>
-            <span class="history-count" id="historyCount">0회</span>
+        <!-- 3. Virtual Hangul Wordle Keypad -->
+        <section class="wordle-keypad-card">
+          <div class="wordle-keypad" id="wordleKeypad">
+            <!-- 3 Rows of interactive Hangul keys rendered dynamically -->
           </div>
-          <div class="legend-pills">
-            <span class="legend-pill pill-green"><span class="dot"></span>일치</span>
-            <span class="legend-pill pill-yellow"><span class="dot"></span>포함</span>
-            <span class="legend-pill pill-red"><span class="dot"></span>미사용</span>
-          </div>
-        </div>
-
-        <div class="history-list" id="historyList">
-          <div class="empty-history-placeholder">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
-            <p>타일을 회전하고 배치한 뒤 <strong>[단어 제출]</strong>을 눌러보세요!</p>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
 
     <!-- Modals -->
@@ -147,23 +204,16 @@
     <div class="modal-overlay hidden" id="rulesModal">
       <div class="modal-card">
         <div class="modal-header">
-          <h2 class="modal-title">🎲 &lt;언어의 조각&gt; 게임 방법</h2>
+          <h2 class="modal-title">🎲 게임 방법 안내</h2>
           <button class="modal-close-btn" id="btnCloseRules" aria-label="닫기">×</button>
         </div>
         <div class="modal-body">
           <section class="rules-section">
-            <h3>1. 게임 목표</h3>
-            <p>주어진 한글 자모 타일을 회전하고 배치하여 사전에 등재된 <strong>정답 단어 타일 배열</strong>을 추리하는 퍼즐입니다.</p>
-          </section>
-
-          <section class="rules-section">
-            <h3>2. 회전 가능한 타일 (Rotation)</h3>
-            <p class="rule-subtext">🔄 아이콘이 있는 타일만 회전 가능합니다.</p>
+            <h3>🧩 1. 조각 맞추기 모드 (Normal Mode)</h3>
+            <p>주어진 한글 자모 타일을 회전하고 배치하여 사전에 등재된 <strong>정답 단어 타일 배열</strong>을 완성합니다.</p>
             <div class="rule-chips-row">
               <div class="rule-chip-group">
                 <span class="rule-chip">ㄱ</span> <span class="arrow">↔</span> <span class="rule-chip">ㄴ</span>
-              </div>
-              <div class="rule-chip-group">
                 <span class="rule-chip">ㅣ</span> <span class="arrow">↔</span> <span class="rule-chip">ㅡ</span>
               </div>
               <div class="rule-chip-group">
@@ -176,28 +226,20 @@
           </section>
 
           <section class="rules-section">
-            <h3>3. 편리한 조작 방법</h3>
-            <ul class="rule-list">
-              <li><strong>탭하여 교환</strong>: 타일을 탭하여 선택(골드 테두리)한 후 다른 타일을 탭하면 두 타일의 위치가 바뀝니다.</li>
-              <li><strong>터치 드래그</strong>: 타일을 원하는 위치로 끌어다 놓아 순서를 변경할 수 있습니다.</li>
-              <li><strong>타일 회전</strong>: 타일의 🔄 버튼을 눌러 다음 글자 모양으로 회전합니다.</li>
-            </ul>
-          </section>
-
-          <section class="rules-section">
-            <h3>4. 타일 채점 피드백 안내</h3>
+            <h3>🔥 2. 하드코어 워들 모드 (Hardcore Wordle)</h3>
+            <p>보유 타일 힌트 없이, <strong>6번의 기회</strong> 안에 키보드로 자모를 입력하여 숨겨진 단어를 맞추는 정통 워들 모드입니다.</p>
             <div class="feedback-examples">
               <div class="feedback-item">
                 <span class="color-box bg-green">초록</span>
-                <span>정답에 사용되었고 <strong>위치도 정확히 일치함</strong></span>
+                <span>해당 위치의 글자가 정확히 일치함 (Correct)</span>
               </div>
               <div class="feedback-item">
                 <span class="color-box bg-yellow">노랑</span>
-                <span>정답에 포함되어 있으나 <strong>위치가 다름</strong></span>
+                <span>단어에 포함되어 있으나 위치가 다름 (Present)</span>
               </div>
               <div class="feedback-item">
-                <span class="color-box bg-red">빨강</span>
-                <span>정답에 <strong>전혀 사용되지 않음</strong></span>
+                <span class="color-box bg-dark">회색</span>
+                <span>단어에 전혀 포함되지 않음 (Absent)</span>
               </div>
             </div>
           </section>
@@ -244,7 +286,20 @@
       </div>
     </div>
 
-    <!-- 4. Final Victory Modal -->
+    <!-- 4. Hardcore Fail / Reveal Modal -->
+    <div class="modal-overlay hidden" id="hardcoreFailModal">
+      <div class="modal-card celebration-card">
+        <div class="celebration-icon">💔</div>
+        <h2 class="modal-title">6회 시도 초과!</h2>
+        <p class="celebration-subtitle" id="hardcoreFailWord">정답: 금메달</p>
+        <p class="rule-subtext">아쉽게도 정답을 맞추지 못했습니다.</p>
+        <button id="btnRetryHardcore" class="primary-btn btn-large">
+          <span>다시 도전하기</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 5. Final Victory Modal -->
     <div class="modal-overlay hidden" id="gameOverModal">
       <div class="modal-card celebration-card">
         <div class="celebration-icon" id="gameOverIcon">🏆</div>
