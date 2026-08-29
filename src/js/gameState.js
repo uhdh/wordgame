@@ -1,5 +1,5 @@
 /**
- * <언어의 조각> Game State Manager (100 Stages, Tile-based Evaluation, Progress Saving)
+ * <언어의 조각> Game State Manager (100 Stages, Tile-based Evaluation, Complete Progress Saving)
  */
 import { STAGES_100 } from './stages.js';
 import { evaluateTileGuess } from './wordValidator.js';
@@ -7,28 +7,21 @@ import { rotateTile, parseTileStreamToSyllables, isRotatable } from './hangulEng
 
 export class GameState {
   constructor() {
-    this.stageIndex = parseInt(localStorage.getItem('wordgame_stage_index') || '0', 10);
-    if (isNaN(this.stageIndex) || this.stageIndex < 0 || this.stageIndex >= STAGES_100.length) {
-      this.stageIndex = 0;
-    }
+    this.stageIndex = 0;
+    this.score = 0;
+    this.clearedStages = [];
+    this.savedStageState = null;
 
     this.currentPuzzle = null;
-    this.score = parseInt(localStorage.getItem('wordgame_score') || '0', 10);
-    if (isNaN(this.score)) this.score = 0;
-
-    // Active selected tile for click-to-swap
     this.selectedTileIndex = null;
-    
-    // Active Tiles in 1 single row: [{ id: 0, char: 'ㄱ', originalChar: 'ㄱ' }]
     this.activeTiles = [];
-    
-    // Guess history: [{ tiles, feedback, summary, word, syllables, isExactMatch, timestamp }]
     this.guesses = [];
     this.isRoundOver = false;
     this.isGameOver = false;
 
-    // Listeners
     this.listeners = [];
+
+    this.loadSavedProgress();
   }
 
   subscribe(listener) {
@@ -42,61 +35,134 @@ export class GameState {
   }
 
   /**
+   * Load saved progress from localStorage (stage, score, cleared stages, in-progress tiles & guesses)
+   */
+  loadSavedProgress() {
+    try {
+      const saved = localStorage.getItem('wordgame_save_data');
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (typeof data.stageIndex === 'number' && data.stageIndex >= 0 && data.stageIndex < STAGES_100.length) {
+          this.stageIndex = data.stageIndex;
+        }
+        if (typeof data.score === 'number' && !isNaN(data.score)) {
+          this.score = data.score;
+        }
+        if (Array.isArray(data.clearedStages)) {
+          this.clearedStages = data.clearedStages;
+        }
+        if (data.savedStageState && data.savedStageState.stageIndex === this.stageIndex) {
+          this.savedStageState = data.savedStageState;
+        }
+      } else {
+        // Fallback for legacy keys
+        const legacyIndex = parseInt(localStorage.getItem('wordgame_stage_index') || '0', 10);
+        if (!isNaN(legacyIndex) && legacyIndex >= 0 && legacyIndex < STAGES_100.length) {
+          this.stageIndex = legacyIndex;
+        }
+        const legacyScore = parseInt(localStorage.getItem('wordgame_score') || '0', 10);
+        if (!isNaN(legacyScore)) {
+          this.score = legacyScore;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse saved game progress:', e);
+    }
+  }
+
+  /**
+   * Save complete progress into localStorage
+   */
+  saveProgress() {
+    try {
+      const data = {
+        stageIndex: this.stageIndex,
+        score: this.score,
+        clearedStages: this.clearedStages,
+        savedStageState: {
+          stageIndex: this.stageIndex,
+          activeTiles: this.activeTiles,
+          guesses: this.guesses,
+          isRoundOver: this.isRoundOver
+        },
+        lastUpdated: Date.now()
+      };
+      localStorage.setItem('wordgame_save_data', JSON.stringify(data));
+      localStorage.setItem('wordgame_stage_index', String(this.stageIndex));
+      localStorage.setItem('wordgame_score', String(this.score));
+    } catch (e) {
+      console.warn('Failed to save game progress:', e);
+    }
+  }
+
+  /**
    * Start a new game or restart from stage 1
    */
   startNewGame() {
     this.stageIndex = 0;
     this.score = 0;
+    this.clearedStages = [];
+    this.savedStageState = null;
     this.isGameOver = false;
     this.saveProgress();
-    this.loadStage(0);
-  }
-
-  saveProgress() {
-    localStorage.setItem('wordgame_stage_index', String(this.stageIndex));
-    localStorage.setItem('wordgame_score', String(this.score));
+    this.loadStage(0, true);
   }
 
   /**
    * Load stage by index (0 ~ 99)
    * @param {number} index 
+   * @param {boolean} forceReset
    */
-  loadStage(index) {
+  loadStage(index, forceReset = false) {
     if (index >= STAGES_100.length) {
       this.isGameOver = true;
       this.notify();
       return;
     }
     this.stageIndex = index;
-    this.saveProgress();
     const stage = STAGES_100[index];
-    this.loadPuzzle(stage);
+    this.loadPuzzle(stage, forceReset);
   }
 
   /**
-   * Load puzzle
+   * Load puzzle (restoring in-progress tiles & attempts if saved)
    * @param {object} puzzle 
+   * @param {boolean} forceReset
    */
-  loadPuzzle(puzzle) {
+  loadPuzzle(puzzle, forceReset = false) {
     this.currentPuzzle = puzzle;
-    this.guesses = [];
-    this.isRoundOver = false;
     this.selectedTileIndex = null;
 
-    // Initialize unified single row of tiles (shuffled initially for fun gameplay)
-    const initialTiles = [...puzzle.tiles];
-    // Shuffle tiles
-    for (let i = initialTiles.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]];
+    // Check if we have saved in-progress tiles & guesses for this stage
+    if (
+      !forceReset &&
+      this.savedStageState &&
+      this.savedStageState.stageIndex === this.stageIndex &&
+      Array.isArray(this.savedStageState.activeTiles) &&
+      this.savedStageState.activeTiles.length === puzzle.targetTiles.length
+    ) {
+      this.activeTiles = this.savedStageState.activeTiles;
+      this.guesses = Array.isArray(this.savedStageState.guesses) ? this.savedStageState.guesses : [];
+      this.isRoundOver = !!this.savedStageState.isRoundOver;
+    } else {
+      this.guesses = [];
+      this.isRoundOver = false;
+
+      // Initialize unified single row of tiles (shuffled initially for gameplay)
+      const initialTiles = [...puzzle.tiles];
+      for (let i = initialTiles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]];
+      }
+
+      this.activeTiles = initialTiles.map((char, index) => ({
+        id: index,
+        char,
+        originalChar: char
+      }));
     }
 
-    this.activeTiles = initialTiles.map((char, index) => ({
-      id: index,
-      char,
-      originalChar: char
-    }));
-
+    this.saveProgress();
     this.notify();
   }
 
@@ -133,11 +199,12 @@ export class GameState {
     const temp = this.activeTiles[i];
     this.activeTiles[i] = this.activeTiles[j];
     this.activeTiles[j] = temp;
+    this.saveProgress();
     this.notify();
   }
 
   /**
-   * Reorder tiles by moving tile from fromIndex to toIndex (drag & drop)
+   * Reorder tiles by moving tile from fromIndex to toIndex (drag & drop insertion)
    * @param {number} fromIndex 
    * @param {number} toIndex 
    */
@@ -148,6 +215,7 @@ export class GameState {
 
     const [item] = this.activeTiles.splice(fromIndex, 1);
     this.activeTiles.splice(toIndex, 0, item);
+    this.saveProgress();
     this.notify();
   }
 
@@ -159,8 +227,9 @@ export class GameState {
   rotateTileAt(index, reverse = false) {
     if (index < 0 || index >= this.activeTiles.length) return;
     const tile = this.activeTiles[index];
-    if (!isRotatable(tile.char)) return; // Do not rotate non-rotatable tiles
+    if (!isRotatable(tile.char)) return;
     tile.char = rotateTile(tile.char, reverse);
+    this.saveProgress();
     this.notify();
   }
 
@@ -175,6 +244,7 @@ export class GameState {
       originalChar: char
     }));
     this.selectedTileIndex = null;
+    this.saveProgress();
     this.notify();
   }
 
@@ -187,6 +257,7 @@ export class GameState {
       [this.activeTiles[i], this.activeTiles[j]] = [this.activeTiles[j], this.activeTiles[i]];
     }
     this.selectedTileIndex = null;
+    this.saveProgress();
     this.notify();
   }
 
@@ -234,11 +305,19 @@ export class GameState {
       this.isRoundOver = true;
       const points = this.currentPuzzle.points || this.currentPuzzle.length;
       this.score += points;
+
+      if (!this.clearedStages.includes(this.stageIndex)) {
+        this.clearedStages.push(this.stageIndex);
+      }
+
+      this.savedStageState = null;
       this.saveProgress();
 
       if (this.stageIndex >= STAGES_100.length - 1) {
         this.isGameOver = true;
       }
+    } else {
+      this.saveProgress();
     }
 
     this.notify();
@@ -249,7 +328,8 @@ export class GameState {
    * Advance to the next round
    */
   nextRound() {
-    this.loadStage(this.stageIndex + 1);
+    this.savedStageState = null;
+    this.loadStage(this.stageIndex + 1, true);
   }
 }
 

@@ -1180,6 +1180,18 @@ button {
   box-shadow: 0 0 12px rgba(251, 191, 36, 0.45);
 }
 
+.stage-card-btn.cleared {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.stage-cleared-badge {
+  color: var(--color-green);
+  font-size: 0.8rem;
+  font-weight: 900;
+  margin-left: 2px;
+}
+
 .stage-card-num {
   font-family: var(--font-display);
   font-size: 0.9rem;

@@ -594,10 +594,12 @@ function renderStageSelectGrid() {
     if (currentStageFilter !== 'all' && stage.level !== currentStageFilter) return;
 
     const isCurrent = gameState.stageIndex === idx;
+    const isCleared = gameState.clearedStages && gameState.clearedStages.includes(idx);
+
     const btn = document.createElement('button');
-    btn.className = `stage-card-btn ${isCurrent ? 'current' : ''}`;
+    btn.className = `stage-card-btn ${isCurrent ? 'current' : ''} ${isCleared ? 'cleared' : ''}`;
     btn.innerHTML = `
-      <span class="stage-card-num">${stage.stage}단계</span>
+      <span class="stage-card-num">${stage.stage}단계 ${isCleared ? '<span class="stage-cleared-badge">✓</span>' : ''}</span>
       <span class="stage-card-len">${stage.length}글자</span>
       <span class="stage-card-diff diff-${stage.level}">${stage.level}</span>
     `;
