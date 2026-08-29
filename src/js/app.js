@@ -259,7 +259,127 @@ function renderAssembledPreview(state) {
 }
 
 /**
- * Render Draggable Unified 1-Line Tile Row (with Mobile Touch Support)
+ * Clear drag highlight classes from all tile cards
+ */
+function clearInsertionStyles() {
+  document.querySelectorAll('.draggable-tile-card').forEach(c => {
+    c.classList.remove('dragging', 'drag-over', 'insert-left', 'insert-right');
+  });
+}
+
+/**
+ * Calculate the target placement based on cursor / touch coordinates.
+ * Seamlessly handles dragging to the start, end, between tiles, gaps, and surrounding margins.
+ */
+function getDropPlacement(clientX, clientY, draggedIndex) {
+  const cards = Array.from(document.querySelectorAll('.draggable-tile-card'));
+  if (cards.length === 0 || draggedIndex === null) return null;
+
+  const trackContainer = el.tilesTrackContainer || document.getElementById('tilesTrackContainer');
+  if (!trackContainer) return null;
+  const containerRect = trackContainer.getBoundingClientRect();
+
+  // Allow generous drag margin around the track (up to 100px outside)
+  if (
+    clientY < containerRect.top - 100 ||
+    clientY > containerRect.bottom + 100 ||
+    clientX < containerRect.left - 100 ||
+    clientX > containerRect.right + 100
+  ) {
+    return null;
+  }
+
+  const firstCard = cards[0];
+  const lastCard = cards[cards.length - 1];
+  const firstRect = firstCard.getBoundingClientRect();
+  const lastRect = lastCard.getBoundingClientRect();
+
+  // 1. Clearly before first card (left/top of first row) -> insert at index 0 (very start)
+  if (clientY <= firstRect.bottom + 10 && clientX < firstRect.left + 20) {
+    return {
+      targetCard: firstCard,
+      cardIndex: 0,
+      insertSide: 'left',
+      toIndex: 0
+    };
+  }
+
+  // 2. Clearly after the last tile (right of last tile, below last row, or right empty space of row) -> insert at last index (very end)
+  if (
+    (clientY >= lastRect.top - 15 && clientX > lastRect.right - 20) ||
+    clientY > lastRect.bottom + 5
+  ) {
+    const lastIndex = cards.length - 1;
+    return {
+      targetCard: lastCard,
+      cardIndex: lastIndex,
+      insertSide: 'right',
+      toIndex: lastIndex
+    };
+  }
+
+  // 3. Direct card hover
+  const elemBelow = document.elementFromPoint(clientX, clientY);
+  const directCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
+
+  if (directCard) {
+    const cardIndex = parseInt(directCard.getAttribute('data-index'), 10);
+    const rect = directCard.getBoundingClientRect();
+    const isRight = clientX > (rect.left + rect.width / 2);
+    let toIndex;
+    if (!isRight) {
+      toIndex = draggedIndex < cardIndex ? cardIndex - 1 : cardIndex;
+    } else {
+      toIndex = draggedIndex < cardIndex ? cardIndex : cardIndex + 1;
+    }
+
+    return {
+      targetCard: directCard,
+      cardIndex,
+      insertSide: isRight ? 'right' : 'left',
+      toIndex: Math.max(0, Math.min(toIndex, cards.length - 1))
+    };
+  }
+
+  // 4. Proximity fallback: Find geometrically closest card
+  let closestCard = null;
+  let minDistance = Infinity;
+
+  cards.forEach((card) => {
+    const rect = card.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dist = Math.hypot(clientX - centerX, clientY - centerY);
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestCard = card;
+    }
+  });
+
+  if (closestCard) {
+    const cardIndex = parseInt(closestCard.getAttribute('data-index'), 10);
+    const rect = closestCard.getBoundingClientRect();
+    const isRight = clientX > (rect.left + rect.width / 2);
+    let toIndex;
+    if (!isRight) {
+      toIndex = draggedIndex < cardIndex ? cardIndex - 1 : cardIndex;
+    } else {
+      toIndex = draggedIndex < cardIndex ? cardIndex : cardIndex + 1;
+    }
+
+    return {
+      targetCard: closestCard,
+      cardIndex,
+      insertSide: isRight ? 'right' : 'left',
+      toIndex: Math.max(0, Math.min(toIndex, cards.length - 1))
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Render Draggable Unified Tile Row (with Mobile Touch & Boundary/Insertion Support)
  */
 function renderTilesTrack(state) {
   el.tilesTrack.innerHTML = '';
@@ -301,14 +421,7 @@ function renderTilesTrack(state) {
       gameState.selectTile(index);
     });
 
-    // Helper to clear drag highlight classes
-    const clearInsertionStyles = () => {
-      document.querySelectorAll('.draggable-tile-card').forEach(c => {
-        c.classList.remove('dragging', 'drag-over', 'insert-left', 'insert-right');
-      });
-    };
-
-    // Touch Event Handling for Mobile Drag & Drop (supports 2D multi-row insertion between tiles)
+    // Touch Event Handling for Mobile Drag & Drop (supports boundary & between-tile insertion)
     card.addEventListener('touchstart', (e) => {
       if (e.target.closest('.tile-rotate-btn')) return;
       const touch = e.touches[0];
@@ -323,25 +436,16 @@ function renderTilesTrack(state) {
       const touch = e.touches[0];
       const dist = Math.hypot(touch.clientX - touchStartX, touch.clientY - touchStartY);
 
-      if (dist > 8) {
+      if (dist > 6) {
         touchActiveTile.classList.add('dragging');
-        const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-        const targetCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
+        const placement = getDropPlacement(touch.clientX, touch.clientY, draggedIndex);
 
         document.querySelectorAll('.draggable-tile-card').forEach(c => {
-          if (c !== touchActiveTile) {
-            c.classList.remove('insert-left', 'insert-right', 'drag-over');
-          }
+          c.classList.remove('insert-left', 'insert-right', 'drag-over');
         });
 
-        if (targetCard && targetCard !== touchActiveTile) {
-          const rect = targetCard.getBoundingClientRect();
-          const isRight = (touch.clientX - rect.left) > (rect.width / 2);
-          if (isRight) {
-            targetCard.classList.add('insert-right');
-          } else {
-            targetCard.classList.add('insert-left');
-          }
+        if (placement && placement.targetCard && (placement.toIndex !== draggedIndex || placement.targetCard !== touchActiveTile)) {
+          placement.targetCard.classList.add(`insert-${placement.insertSide}`);
         }
       }
     }, { passive: true });
@@ -349,27 +453,12 @@ function renderTilesTrack(state) {
     card.addEventListener('touchend', (e) => {
       if (!touchActiveTile || draggedIndex === null) return;
       const changedTouch = e.changedTouches[0];
-      const elemBelow = document.elementFromPoint(changedTouch.clientX, changedTouch.clientY);
-      const targetCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
+      const placement = getDropPlacement(changedTouch.clientX, changedTouch.clientY, draggedIndex);
 
-      if (targetCard && targetCard !== touchActiveTile) {
-        const targetIndex = parseInt(targetCard.getAttribute('data-index'), 10);
-        if (!isNaN(targetIndex)) {
-          const rect = targetCard.getBoundingClientRect();
-          const isRight = (changedTouch.clientX - rect.left) > (rect.width / 2);
-          let toIndex;
-          if (!isRight) {
-            toIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-          } else {
-            toIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
-          }
-
-          if (toIndex !== draggedIndex && toIndex >= 0 && toIndex < gameState.activeTiles.length) {
-            triggerHaptic(20);
-            sound.playTileCombine();
-            gameState.moveTile(draggedIndex, toIndex);
-          }
-        }
+      if (placement && placement.toIndex !== draggedIndex && placement.toIndex >= 0 && placement.toIndex < gameState.activeTiles.length) {
+        triggerHaptic(20);
+        sound.playTileCombine();
+        gameState.moveTile(draggedIndex, placement.toIndex);
       }
 
       clearInsertionStyles();
@@ -377,7 +466,7 @@ function renderTilesTrack(state) {
       touchActiveTile = null;
     });
 
-    // HTML5 Desktop Drag and Drop Events (supports insertion between tiles)
+    // HTML5 Desktop Drag and Drop Events
     card.addEventListener('dragstart', (e) => {
       draggedIndex = index;
       card.classList.add('dragging');
@@ -393,44 +482,25 @@ function renderTilesTrack(state) {
     card.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (draggedIndex !== null && draggedIndex !== index) {
-        const rect = card.getBoundingClientRect();
-        const isRight = (e.clientX - rect.left) > (rect.width / 2);
-
+      if (draggedIndex !== null) {
+        const placement = getDropPlacement(e.clientX, e.clientY, draggedIndex);
         document.querySelectorAll('.draggable-tile-card').forEach(c => {
-          if (c !== card) c.classList.remove('insert-left', 'insert-right', 'drag-over');
+          c.classList.remove('insert-left', 'insert-right', 'drag-over');
         });
-
-        if (isRight) {
-          card.classList.add('insert-right');
-          card.classList.remove('insert-left');
-        } else {
-          card.classList.add('insert-left');
-          card.classList.remove('insert-right');
+        if (placement && placement.targetCard && placement.toIndex !== draggedIndex) {
+          placement.targetCard.classList.add(`insert-${placement.insertSide}`);
         }
       }
     });
 
-    card.addEventListener('dragleave', () => {
-      card.classList.remove('insert-left', 'insert-right', 'drag-over');
-    });
-
     card.addEventListener('drop', (e) => {
       e.preventDefault();
-      if (draggedIndex !== null && draggedIndex !== index) {
-        const rect = card.getBoundingClientRect();
-        const isRight = (e.clientX - rect.left) > (rect.width / 2);
-        let toIndex;
-        if (!isRight) {
-          toIndex = draggedIndex < index ? index - 1 : index;
-        } else {
-          toIndex = draggedIndex < index ? index : index + 1;
-        }
-
-        if (toIndex !== draggedIndex && toIndex >= 0 && toIndex < gameState.activeTiles.length) {
+      if (draggedIndex !== null) {
+        const placement = getDropPlacement(e.clientX, e.clientY, draggedIndex);
+        if (placement && placement.toIndex !== draggedIndex && placement.toIndex >= 0 && placement.toIndex < gameState.activeTiles.length) {
           triggerHaptic(20);
           sound.playTileCombine();
-          gameState.moveTile(draggedIndex, toIndex);
+          gameState.moveTile(draggedIndex, placement.toIndex);
         }
       }
       clearInsertionStyles();

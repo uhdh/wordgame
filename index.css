@@ -517,9 +517,10 @@ button {
 /* Adaptive Smart Tile Tray - Auto Wrap to prevent clipping */
 .tiles-track-container {
   width: 100%;
-  padding: 0.2rem 0;
+  padding: 0.35rem 0.25rem 0.5rem;
   display: flex;
   justify-content: center;
+  touch-action: pan-y;
 }
 
 .tiles-track {
@@ -531,6 +532,7 @@ button {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
+  padding: 0.25rem 0.25rem 0.4rem;
 }
 
 /* Draggable / Swappable Tile Card */
