@@ -75,6 +75,37 @@ const KEYPAD_ROWS = [
   ['ENTER', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅊ', 'ㅠ', 'ㅜ', 'ㅡ', 'BACKSPACE']
 ];
 
+// Physical Keyboard code to Korean 2-Set Jamo mapping (QWERTY layout)
+const CODE_TO_HANGUL = {
+  'KeyQ': 'ㅂ', 'KeyW': 'ㅈ', 'KeyE': 'ㄷ', 'KeyR': 'ㄱ', 'KeyT': 'ㅅ',
+  'KeyY': 'ㅛ', 'KeyU': 'ㅕ', 'KeyI': 'ㅑ', 'KeyO': 'ㅐ', 'KeyP': 'ㅔ',
+  'KeyA': 'ㅁ', 'KeyS': 'ㄴ', 'KeyD': 'ㅇ', 'KeyF': 'ㄹ', 'KeyG': 'ㅎ',
+  'KeyH': 'ㅗ', 'KeyJ': 'ㅓ', 'KeyK': 'ㅏ', 'KeyL': 'ㅣ',
+  'KeyZ': 'ㅋ', 'KeyX': 'ㅌ', 'KeyC': 'ㅊ', 'KeyV': 'ㅍ',
+  'KeyB': 'ㅠ', 'KeyN': 'ㅜ', 'KeyM': 'ㅡ'
+};
+
+const SHIFT_CODE_TO_HANGUL = {
+  'KeyQ': 'ㅃ', 'KeyW': 'ㅉ', 'KeyE': 'ㄸ', 'KeyR': 'ㄲ', 'KeyT': 'ㅆ',
+  'KeyO': 'ㅒ', 'KeyP': 'ㅖ'
+};
+
+function highlightKeypadButton(key) {
+  const btn = document.querySelector(`.wordle-key[data-key="${key}"]`);
+  if (btn) {
+    btn.classList.add('key-pressed');
+    setTimeout(() => btn.classList.remove('key-pressed'), 130);
+  }
+}
+
+function highlightActionKey(actionClass) {
+  const btn = document.querySelector(`.wordle-key.${actionClass}`);
+  if (btn) {
+    btn.classList.add('key-pressed');
+    setTimeout(() => btn.classList.remove('key-pressed'), 130);
+  }
+}
+
 // Drag & Drop / Touch State
 let draggedIndex = null;
 let touchStartX = 0;
@@ -227,8 +258,10 @@ function bindEvents() {
     gameState.startNewGame();
   });
 
-  // Global Keyboard Shortcuts (Physical Keyboard support)
+  // Global Keyboard Shortcuts (Full Physical Keyboard support for QWERTY & Korean)
   window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     if (!el.roundClearModal.classList.contains('hidden')) {
       if (e.key === 'Enter') el.btnNextRound.click();
       return;
@@ -244,36 +277,74 @@ function bindEvents() {
 
     // Normal Mode Shortcuts
     if (gameState.gameMode === 'normal') {
-      if (e.key === 'Enter' && gameState.canSubmit()) {
-        handleSubmitGuess();
+      if (e.key === 'Enter') {
+        if (gameState.canSubmit()) handleSubmitGuess();
+      } else if (e.key >= '1' && e.key <= '9') {
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx < gameState.activeTiles.length) {
+          triggerHaptic(15);
+          sound.playTileClick();
+          gameState.selectTile(idx);
+        }
+      } else if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') {
+        if (gameState.selectedTileIndex !== null) {
+          triggerHaptic(12);
+          sound.playTileRotate();
+          gameState.rotateTileAt(gameState.selectedTileIndex);
+        }
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        triggerHaptic(15);
+        sound.playTileRotate();
+        gameState.shuffleTiles();
       }
     }
     // Hardcore Mode Keyboard Support
     else if (gameState.gameMode === 'hardcore') {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+        highlightActionKey('key-submit');
         handleHardcoreSubmit();
-      } else if (e.key === 'Backspace') {
+      } else if (e.key === 'Backspace' || e.code === 'Backspace' || e.key === 'Delete' || e.code === 'Delete') {
+        highlightActionKey('key-delete');
         triggerHaptic(10);
         sound.playTileClick();
         gameState.deleteHardcoreJamo();
-      } else if (e.key.length === 1) {
-        // Check if Korean Jamo or Hangul Syllable
-        const char = e.key;
-        const { cho, jung, jong, isHangul } = decomposeHangul(char);
-        if (isHangul) {
-          triggerHaptic(10);
-          sound.playTileClick();
-          if (cho) gameState.typeHardcoreJamo(cho);
-          if (jung) gameState.typeHardcoreJamo(jung);
-          if (jong) gameState.typeHardcoreJamo(jong);
-        } else {
-          // Direct Jamo key check (e.g. 'ㄱ', 'ㅏ')
-          const jamos = 'ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅍㅊㅠㅜㅡ';
-          if (jamos.includes(char)) {
+      } else {
+        let jamosToType = [];
+
+        if (e.shiftKey && SHIFT_CODE_TO_HANGUL[e.code]) {
+          const shiftJamo = SHIFT_CODE_TO_HANGUL[e.code];
+          if (shiftJamo === 'ㄲ') jamosToType = ['ㄱ', 'ㄱ'];
+          else if (shiftJamo === 'ㄸ') jamosToType = ['ㄷ', 'ㄷ'];
+          else if (shiftJamo === 'ㅃ') jamosToType = ['ㅂ', 'ㅂ'];
+          else if (shiftJamo === 'ㅆ') jamosToType = ['ㅅ', 'ㅅ'];
+          else if (shiftJamo === 'ㅉ') jamosToType = ['ㅈ', 'ㅈ'];
+          else if (shiftJamo === 'ㅒ') jamosToType = ['ㅑ', 'ㅣ'];
+          else if (shiftJamo === 'ㅖ') jamosToType = ['ㅕ', 'ㅣ'];
+          else jamosToType = [shiftJamo];
+        } else if (CODE_TO_HANGUL[e.code]) {
+          jamosToType = [CODE_TO_HANGUL[e.code]];
+        } else if (e.key && e.key.length === 1) {
+          const { cho, jung, jong, isHangul } = decomposeHangul(e.key);
+          if (isHangul) {
+            if (cho) jamosToType.push(cho);
+            if (jung) jamosToType.push(jung);
+            if (jong) jamosToType.push(jong);
+          } else {
+            const hangulJamos = 'ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅍㅊㅠㅜㅡ';
+            if (hangulJamos.includes(e.key)) {
+              jamosToType = [e.key];
+            }
+          }
+        }
+
+        if (jamosToType.length > 0) {
+          jamosToType.forEach(jamo => {
+            highlightKeypadButton(jamo);
             triggerHaptic(10);
             sound.playTileClick();
-            gameState.typeHardcoreJamo(char);
-          }
+            gameState.typeHardcoreJamo(jamo);
+          });
         }
       }
     }

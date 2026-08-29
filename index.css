@@ -540,9 +540,10 @@ button {
   touch-action: manipulation;
 }
 
-.wordle-key:active {
+.wordle-key:active, .wordle-key.key-pressed {
   transform: scale(0.92);
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5) !important;
 }
 
 .wordle-key.key-action {
