@@ -579,10 +579,16 @@ button {
 }
 
 .wordle-key.key-absent {
-  background: #0f172a !important;
-  border-color: #1e293b !important;
-  color: #475569 !important;
-  opacity: 0.55;
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #94a3b8 !important;
+  opacity: 0.85;
+}
+
+.wordle-key.key-absent:hover, .wordle-key.key-absent:active {
+  background: #334155 !important;
+  color: #ffffff !important;
+  opacity: 1;
 }
 
 .bg-dark {
