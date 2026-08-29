@@ -301,7 +301,14 @@ function renderTilesTrack(state) {
       gameState.selectTile(index);
     });
 
-    // Touch Event Handling for Mobile Drag & Drop
+    // Helper to clear drag highlight classes
+    const clearInsertionStyles = () => {
+      document.querySelectorAll('.draggable-tile-card').forEach(c => {
+        c.classList.remove('dragging', 'drag-over', 'insert-left', 'insert-right');
+      });
+    };
+
+    // Touch Event Handling for Mobile Drag & Drop (supports 2D multi-row insertion between tiles)
     card.addEventListener('touchstart', (e) => {
       if (e.target.closest('.tile-rotate-btn')) return;
       const touch = e.touches[0];
@@ -314,18 +321,27 @@ function renderTilesTrack(state) {
     card.addEventListener('touchmove', (e) => {
       if (!touchActiveTile || draggedIndex === null) return;
       const touch = e.touches[0];
-      const deltaX = Math.abs(touch.clientX - touchStartX);
-      const deltaY = Math.abs(touch.clientY - touchStartY);
+      const dist = Math.hypot(touch.clientX - touchStartX, touch.clientY - touchStartY);
 
-      // If moving horizontally across tiles, mark dragging
-      if (deltaX > 10 && deltaX > deltaY) {
+      if (dist > 8) {
         touchActiveTile.classList.add('dragging');
         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         const targetCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
 
-        document.querySelectorAll('.draggable-tile-card').forEach(c => c.classList.remove('drag-over'));
+        document.querySelectorAll('.draggable-tile-card').forEach(c => {
+          if (c !== touchActiveTile) {
+            c.classList.remove('insert-left', 'insert-right', 'drag-over');
+          }
+        });
+
         if (targetCard && targetCard !== touchActiveTile) {
-          targetCard.classList.add('drag-over');
+          const rect = targetCard.getBoundingClientRect();
+          const isRight = (touch.clientX - rect.left) > (rect.width / 2);
+          if (isRight) {
+            targetCard.classList.add('insert-right');
+          } else {
+            targetCard.classList.add('insert-left');
+          }
         }
       }
     }, { passive: true });
@@ -336,25 +352,32 @@ function renderTilesTrack(state) {
       const elemBelow = document.elementFromPoint(changedTouch.clientX, changedTouch.clientY);
       const targetCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
 
-      document.querySelectorAll('.draggable-tile-card').forEach(c => {
-        c.classList.remove('dragging');
-        c.classList.remove('drag-over');
-      });
-
-      if (targetCard) {
+      if (targetCard && targetCard !== touchActiveTile) {
         const targetIndex = parseInt(targetCard.getAttribute('data-index'), 10);
-        if (!isNaN(targetIndex) && targetIndex !== draggedIndex) {
-          triggerHaptic(20);
-          sound.playTileCombine();
-          gameState.moveTile(draggedIndex, targetIndex);
+        if (!isNaN(targetIndex)) {
+          const rect = targetCard.getBoundingClientRect();
+          const isRight = (changedTouch.clientX - rect.left) > (rect.width / 2);
+          let toIndex;
+          if (!isRight) {
+            toIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+          } else {
+            toIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
+          }
+
+          if (toIndex !== draggedIndex && toIndex >= 0 && toIndex < gameState.activeTiles.length) {
+            triggerHaptic(20);
+            sound.playTileCombine();
+            gameState.moveTile(draggedIndex, toIndex);
+          }
         }
       }
 
+      clearInsertionStyles();
       draggedIndex = null;
       touchActiveTile = null;
     });
 
-    // HTML5 Desktop Drag and Drop Events
+    // HTML5 Desktop Drag and Drop Events (supports insertion between tiles)
     card.addEventListener('dragstart', (e) => {
       draggedIndex = index;
       card.classList.add('dragging');
@@ -363,8 +386,7 @@ function renderTilesTrack(state) {
     });
 
     card.addEventListener('dragend', () => {
-      card.classList.remove('dragging');
-      document.querySelectorAll('.draggable-tile-card').forEach(c => c.classList.remove('drag-over'));
+      clearInsertionStyles();
       draggedIndex = null;
     });
 
@@ -372,22 +394,47 @@ function renderTilesTrack(state) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       if (draggedIndex !== null && draggedIndex !== index) {
-        card.classList.add('drag-over');
+        const rect = card.getBoundingClientRect();
+        const isRight = (e.clientX - rect.left) > (rect.width / 2);
+
+        document.querySelectorAll('.draggable-tile-card').forEach(c => {
+          if (c !== card) c.classList.remove('insert-left', 'insert-right', 'drag-over');
+        });
+
+        if (isRight) {
+          card.classList.add('insert-right');
+          card.classList.remove('insert-left');
+        } else {
+          card.classList.add('insert-left');
+          card.classList.remove('insert-right');
+        }
       }
     });
 
     card.addEventListener('dragleave', () => {
-      card.classList.remove('drag-over');
+      card.classList.remove('insert-left', 'insert-right', 'drag-over');
     });
 
     card.addEventListener('drop', (e) => {
       e.preventDefault();
-      card.classList.remove('drag-over');
       if (draggedIndex !== null && draggedIndex !== index) {
-        triggerHaptic(20);
-        sound.playTileCombine();
-        gameState.moveTile(draggedIndex, index);
+        const rect = card.getBoundingClientRect();
+        const isRight = (e.clientX - rect.left) > (rect.width / 2);
+        let toIndex;
+        if (!isRight) {
+          toIndex = draggedIndex < index ? index - 1 : index;
+        } else {
+          toIndex = draggedIndex < index ? index : index + 1;
+        }
+
+        if (toIndex !== draggedIndex && toIndex >= 0 && toIndex < gameState.activeTiles.length) {
+          triggerHaptic(20);
+          sound.playTileCombine();
+          gameState.moveTile(draggedIndex, toIndex);
+        }
       }
+      clearInsertionStyles();
+      draggedIndex = null;
     });
 
     el.tilesTrack.appendChild(card);
@@ -414,7 +461,7 @@ function handleSubmitGuess() {
 }
 
 /**
- * Render Guess History (Wordle Board with tile-based colors, without assembled word)
+ * Render Guess History (Wordle Board with tile-based colors, newest on top, max 5 entries)
  */
 function renderHistory(state) {
   el.historyCount.textContent = `${state.guesses.length}회 제출`;
@@ -422,7 +469,7 @@ function renderHistory(state) {
   if (state.guesses.length === 0) {
     el.historyList.innerHTML = `
       <div class="empty-history-placeholder">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
         <p>타일을 회전하고 배치한 뒤 <strong>[단어 제출]</strong>을 눌러 결과를 확인해보세요!</p>
       </div>
     `;
@@ -431,7 +478,13 @@ function renderHistory(state) {
 
   el.historyList.innerHTML = '';
 
-  state.guesses.forEach((entry, attemptIdx) => {
+  // Get the last 5 guesses, reversed so that the newest one is at the top
+  const recentGuesses = state.guesses
+    .map((entry, idx) => ({ entry, attemptNum: idx + 1 }))
+    .slice(-5)
+    .reverse();
+
+  recentGuesses.forEach(({ entry, attemptNum }) => {
     const row = document.createElement('div');
     row.className = 'history-row';
 
@@ -451,24 +504,14 @@ function renderHistory(state) {
     entry.hasAnimated = true;
 
     row.innerHTML = `
-      <div class="history-row-left">
-        <span class="history-attempt-num">#${attemptIdx + 1}</span>
-        <div class="history-tiles-box">
-          ${tilesHtml}
-        </div>
-      </div>
-      <div class="history-summary-pills">
-        ${entry.summary.green > 0 ? `<span class="summary-tag tag-green">🟩 ${entry.summary.green}</span>` : ''}
-        ${entry.summary.yellow > 0 ? `<span class="summary-tag tag-yellow">🟨 ${entry.summary.yellow}</span>` : ''}
-        ${entry.summary.red > 0 ? `<span class="summary-tag tag-red">🟥 ${entry.summary.red}</span>` : ''}
+      <span class="history-attempt-num">#${attemptNum}</span>
+      <div class="history-tiles-box">
+        ${tilesHtml}
       </div>
     `;
 
     el.historyList.appendChild(row);
   });
-
-  // Scroll to latest
-  el.historyList.scrollTop = el.historyList.scrollHeight;
 }
 
 /**
