@@ -95,6 +95,7 @@ let draggedIndex = null;
 let touchStartX = 0;
 let touchStartY = 0;
 let touchActiveTile = null;
+let hasDraggedThisTouch = false;
 let currentStageFilter = 'all';
 
 function triggerHaptic(pattern = 10) {
@@ -548,7 +549,7 @@ function renderTilesTrack(state) {
       statusClass = `status-${lastGuess.feedback[index]}`;
     }
 
-    card.className = `draggable-tile-card ${isSelected ? 'selected' : ''} ${statusClass}`.trim();
+    card.className = `draggable-tile-card ${canRotate ? 'rotatable-tile' : ''} ${statusClass}`.trim();
     card.setAttribute('draggable', 'true');
     card.setAttribute('data-index', String(index));
 
@@ -558,33 +559,28 @@ function renderTilesTrack(state) {
       ${canRotate ? '<button class="tile-rotate-btn" title="타일 회전 (🔄)" aria-label="회전">🔄</button>' : ''}
     `;
 
-    if (canRotate) {
-      const rotateBtn = card.querySelector('.tile-rotate-btn');
-      const handleRotate = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+    // Click/Tap on the tile chip ALWAYS rotates if rotatable (NO tap-to-swap)!
+    card.addEventListener('click', () => {
+      if (hasDraggedThisTouch) {
+        hasDraggedThisTouch = false;
+        return;
+      }
+      if (canRotate) {
         triggerHaptic(12);
         sound.playTileRotate();
         gameState.rotateTileAt(index);
-      };
-      rotateBtn.addEventListener('click', handleRotate);
-      rotateBtn.addEventListener('touchend', handleRotate);
-    }
-
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.tile-rotate-btn')) return;
-      triggerHaptic(15);
-      sound.playTileClick();
-      gameState.selectTile(index);
+      } else {
+        triggerHaptic(8);
+      }
     });
 
     card.addEventListener('touchstart', (e) => {
-      if (e.target.closest('.tile-rotate-btn')) return;
       const touch = e.touches[0];
       touchStartX = touch.clientX;
       touchStartY = touch.clientY;
       touchActiveTile = card;
       draggedIndex = index;
+      hasDraggedThisTouch = false;
     }, { passive: true });
 
     card.addEventListener('touchmove', (e) => {
@@ -593,6 +589,7 @@ function renderTilesTrack(state) {
       const dist = Math.hypot(touch.clientX - touchStartX, touch.clientY - touchStartY);
 
       if (dist > 6) {
+        hasDraggedThisTouch = true;
         touchActiveTile.classList.add('dragging');
         const placement = getDropPlacement(touch.clientX, touch.clientY, draggedIndex);
 
@@ -608,13 +605,16 @@ function renderTilesTrack(state) {
 
     card.addEventListener('touchend', (e) => {
       if (!touchActiveTile || draggedIndex === null) return;
-      const changedTouch = e.changedTouches[0];
-      const placement = getDropPlacement(changedTouch.clientX, changedTouch.clientY, draggedIndex);
 
-      if (placement && placement.toIndex !== draggedIndex && placement.toIndex >= 0 && placement.toIndex < gameState.activeTiles.length) {
-        triggerHaptic(20);
-        sound.playTileCombine();
-        gameState.moveTile(draggedIndex, placement.toIndex);
+      if (hasDraggedThisTouch) {
+        const changedTouch = e.changedTouches[0];
+        const placement = getDropPlacement(changedTouch.clientX, changedTouch.clientY, draggedIndex);
+
+        if (placement && placement.toIndex !== draggedIndex && placement.toIndex >= 0 && placement.toIndex < gameState.activeTiles.length) {
+          triggerHaptic(20);
+          sound.playTileCombine();
+          gameState.moveTile(draggedIndex, placement.toIndex);
+        }
       }
 
       clearInsertionStyles();
