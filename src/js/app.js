@@ -1,26 +1,46 @@
 /**
- * <언어의 조각> Application Controller (Mobile Optimized, Touch Drag & Drop, Dual Mode: Normal & Hardcore Wordle)
+ * <언어의 조각> Application Controller (Game Hub Unified, Leaderboard & Mobile Drag-and-Drop)
  */
 
 import { gameState } from './gameState.js';
 import { sound } from './audioEffects.js';
-import { isRotatable, getWordChosungHint, decomposeHangul } from './hangulEngine.js';
+import { isRotatable, getWordChosungHint } from './hangulEngine.js';
 import { STAGES_100 } from './stages.js';
+
+// Supabase & Ranking Config
+const SUPABASE_URL = 'https://paktzmofotvwfdxcpmzv.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_jWbstEn2pKJTNDxLTR4Jig_asglvzGW';
+const SUPABASE_TABLE = 'wordgame_leaderboard';
+const NICKNAME_KEY = 'wordgameNickname';
+
+const NICKNAME_POOL = [
+  '이상민', '정근우', '박지민', '이태균', '하승진', '현성주', '윤비', '이진형', '홍진호', '서출구',
+  '최혜선', '허성범', '김경훈', '김유현', '김남희', '강지후', '곽범', '이관희', '신승용', '최연청', '덕후'
+];
+
+function randomNickname() {
+  const word = NICKNAME_POOL[Math.floor(Math.random() * NICKNAME_POOL.length)];
+  const num = Math.floor(Math.random() * 999) + 1;
+  return `${word}#${num}`;
+}
+
+function getOrCreateStoredNickname(key) {
+  const saved = localStorage.getItem(key);
+  if (saved) return saved;
+  const generated = randomNickname();
+  localStorage.setItem(key, generated);
+  return generated;
+}
 
 // DOM Elements
 const el = {
-  // Mode Switcher
-  btnModeNormal: document.getElementById('btnModeNormal'),
-  btnModeHardcore: document.getElementById('btnModeHardcore'),
-  normalModeView: document.getElementById('normalModeView'),
-  hardcoreModeView: document.getElementById('hardcoreModeView'),
-
   // Header & Meta
   roundNumber: document.getElementById('roundNumber'),
   difficultyPill: document.getElementById('difficultyPill'),
   scoreVal: document.getElementById('scoreVal'),
 
-  // Normal Mode Elements
+  // Game Elements
+  normalModeView: document.getElementById('normalModeView'),
   targetDesc: document.getElementById('targetDesc'),
   btnToggleHint: document.getElementById('btnToggleHint'),
   stageHintBox: document.getElementById('stageHintBox'),
@@ -33,18 +53,6 @@ const el = {
   btnSubmitGuess: document.getElementById('btnSubmitGuess'),
   historyList: document.getElementById('historyList'),
   historyCount: document.getElementById('historyCount'),
-
-  // Hardcore Wordle Mode Elements
-  hardcoreTargetDesc: document.getElementById('hardcoreTargetDesc'),
-  hardcoreAttemptCount: document.getElementById('hardcoreAttemptCount'),
-  btnToggleHardcoreHint: document.getElementById('btnToggleHardcoreHint'),
-  hardcoreHintBox: document.getElementById('hardcoreHintBox'),
-  hardcoreHintText: document.getElementById('hardcoreHintText'),
-  wordleGrid: document.getElementById('wordleGrid'),
-  wordleKeypad: document.getElementById('wordleKeypad'),
-  hardcoreFailModal: document.getElementById('hardcoreFailModal'),
-  hardcoreFailWord: document.getElementById('hardcoreFailWord'),
-  btnRetryHardcore: document.getElementById('btnRetryHardcore'),
 
   // Modals & Actions
   btnRules: document.getElementById('btnRules'),
@@ -62,67 +70,97 @@ const el = {
   roundClearWord: document.getElementById('roundClearWord'),
   awardedPoints: document.getElementById('awardedPoints'),
   btnNextRound: document.getElementById('btnNextRound'),
+  btnOpenLeaderboardFromClear: document.getElementById('btnOpenLeaderboardFromClear'),
   gameOverModal: document.getElementById('gameOverModal'),
   finalScoreText: document.getElementById('finalScoreText'),
   btnRestartGame: document.getElementById('btnRestartGame'),
-  confettiCanvas: document.getElementById('confettiCanvas')
+  confettiCanvas: document.getElementById('confettiCanvas'),
+
+  // Leaderboard Elements
+  btnLeaderboard: document.getElementById('btnLeaderboard'),
+  leaderboardModal: document.getElementById('leaderboardModal'),
+  btnCloseLeaderboard: document.getElementById('btnCloseLeaderboard'),
+  leaderboardNicknameInput: document.getElementById('leaderboardNicknameInput'),
+  btnSubmitScore: document.getElementById('btnSubmitScore'),
+  leaderboardStatusMsg: document.getElementById('leaderboardStatusMsg'),
+  leaderboardList: document.getElementById('leaderboardList'),
+
+  // Share & Toast
+  btnShareStage: document.getElementById('btnShareStage'),
+  toastNotification: document.getElementById('toastNotification')
 };
 
-// Keypad layout definition for Hardcore Wordle
-const KEYPAD_ROWS = [
-  ['ㅂ', 'ㅈ', 'ㄷ', 'ㄱ', 'ㅅ', 'ㅛ', 'ㅕ', 'ㅑ', 'ㅐ', 'ㅔ'],
-  ['ㅁ', 'ㄴ', 'ㅇ', 'ㄹ', 'ㅎ', 'ㅗ', 'ㅓ', 'ㅏ', 'ㅣ'],
-  ['ENTER', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅊ', 'ㅠ', 'ㅜ', 'ㅡ', 'BACKSPACE']
-];
-
-// Physical Keyboard code to Korean 2-Set Jamo mapping (QWERTY layout)
-const CODE_TO_HANGUL = {
-  'KeyQ': 'ㅂ', 'KeyW': 'ㅈ', 'KeyE': 'ㄷ', 'KeyR': 'ㄱ', 'KeyT': 'ㅅ',
-  'KeyY': 'ㅛ', 'KeyU': 'ㅕ', 'KeyI': 'ㅑ', 'KeyO': 'ㅐ', 'KeyP': 'ㅔ',
-  'KeyA': 'ㅁ', 'KeyS': 'ㄴ', 'KeyD': 'ㅇ', 'KeyF': 'ㄹ', 'KeyG': 'ㅎ',
-  'KeyH': 'ㅗ', 'KeyJ': 'ㅓ', 'KeyK': 'ㅏ', 'KeyL': 'ㅣ',
-  'KeyZ': 'ㅋ', 'KeyX': 'ㅌ', 'KeyC': 'ㅊ', 'KeyV': 'ㅍ',
-  'KeyB': 'ㅠ', 'KeyN': 'ㅜ', 'KeyM': 'ㅡ'
-};
-
-const SHIFT_CODE_TO_HANGUL = {
-  'KeyQ': 'ㅃ', 'KeyW': 'ㅉ', 'KeyE': 'ㄸ', 'KeyR': 'ㄲ', 'KeyT': 'ㅆ',
-  'KeyO': 'ㅒ', 'KeyP': 'ㅖ'
-};
-
-function highlightKeypadButton(key) {
-  const btn = document.querySelector(`.wordle-key[data-key="${key}"]`);
-  if (btn) {
-    btn.classList.add('key-pressed');
-    setTimeout(() => btn.classList.remove('key-pressed'), 130);
-  }
-}
-
-function highlightActionKey(actionClass) {
-  const btn = document.querySelector(`.wordle-key.${actionClass}`);
-  if (btn) {
-    btn.classList.add('key-pressed');
-    setTimeout(() => btn.classList.remove('key-pressed'), 130);
-  }
-}
-
-// Drag & Drop / Touch State
+// Drag & Drop State
 let draggedIndex = null;
 let touchStartX = 0;
 let touchStartY = 0;
 let touchActiveTile = null;
 let currentStageFilter = 'all';
 
-/**
- * Haptic Vibration Helper
- */
 function triggerHaptic(pattern = 10) {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
       navigator.vibrate(pattern);
+    } catch (e) {}
+  }
+}
+
+function syncUrlWithStage(stageIndex) {
+  const stageNum = stageIndex + 1;
+  const currentUrl = new URL(window.location.href);
+  if (currentUrl.searchParams.get('stage') !== String(stageNum)) {
+    currentUrl.searchParams.set('stage', stageNum);
+    window.history.replaceState({ stage: stageNum }, '', currentUrl.toString());
+  }
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  if (!el.toastNotification) return;
+  el.toastNotification.textContent = msg;
+  el.toastNotification.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.toastNotification.classList.remove('show');
+    toastTimer = null;
+  }, 2400);
+}
+
+async function handleShareStage() {
+  triggerHaptic(15);
+  sound.playTileClick();
+  const stageNum = gameState.stageIndex + 1;
+  const currentStageObj = STAGES_100[gameState.stageIndex];
+  const wordLength = currentStageObj ? currentStageObj.word.length : 3;
+  const shareTitle = `<언어의 조각> STAGE ${stageNum}`;
+  const shareText = `<언어의 조각> STAGE ${stageNum} (${wordLength}글자 퍼즐)에 도전해보세요!`;
+  const shareUrl = `${window.location.origin}${window.location.pathname}?stage=${stageNum}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
+      });
+      showToast(`STAGE ${stageNum} URL을 공유했습니다!`);
+      return;
     } catch (e) {
-      // Ignore vibration errors if not supported
+      if (e.name === 'AbortError') return;
     }
+  }
+
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    showToast(`🔗 STAGE ${stageNum} URL이 클립보드에 복사되었습니다!`);
+  } catch (err) {
+    const tempInput = document.createElement('input');
+    tempInput.value = shareUrl;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand('copy');
+    document.body.removeChild(tempInput);
+    showToast(`🔗 STAGE ${stageNum} URL이 클립보드에 복사되었습니다!`);
   }
 }
 
@@ -132,27 +170,33 @@ function triggerHaptic(pattern = 10) {
 function init() {
   gameState.subscribe(render);
   bindEvents();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramStage = urlParams.get('stage') || urlParams.get('s');
+  if (paramStage) {
+    const parsedStage = parseInt(paramStage, 10);
+    if (!isNaN(parsedStage) && parsedStage >= 1 && parsedStage <= 100) {
+      gameState.stageIndex = parsedStage - 1;
+    }
+  }
+
   gameState.loadStage(gameState.stageIndex);
+  syncUrlWithStage(gameState.stageIndex);
   updateSoundIcon();
+
+  if (el.leaderboardNicknameInput) {
+    el.leaderboardNicknameInput.value = getOrCreateStoredNickname(NICKNAME_KEY);
+  }
 }
 
 /**
  * Bind DOM Event Listeners
  */
 function bindEvents() {
-  // Mode Switcher Tabs
-  el.btnModeNormal.addEventListener('click', () => {
-    triggerHaptic(10);
-    sound.playTileClick();
-    gameState.setGameMode('normal');
-  });
-
-  el.btnModeHardcore.addEventListener('click', () => {
-    triggerHaptic(10);
-    sound.playTileClick();
-    gameState.setGameMode('hardcore');
-  });
-
+  // Share Stage Button
+  if (el.btnShareStage) {
+    el.btnShareStage.addEventListener('click', handleShareStage);
+  }
   // Normal Submit Guess
   el.btnSubmitGuess.addEventListener('click', () => {
     handleSubmitGuess();
@@ -172,17 +216,15 @@ function bindEvents() {
     gameState.resetTiles();
   });
 
-  // Hint Toggles
+  // Hint Toggle
   el.btnToggleHint.addEventListener('click', () => {
     triggerHaptic(10);
     sound.playTileClick();
+    const isOpening = el.stageHintBox.classList.contains('hidden');
     el.stageHintBox.classList.toggle('hidden');
-  });
-
-  el.btnToggleHardcoreHint.addEventListener('click', () => {
-    triggerHaptic(10);
-    sound.playTileClick();
-    el.hardcoreHintBox.classList.toggle('hidden');
+    if (isOpening) {
+      gameState.useHint();
+    }
   });
 
   // Sound Toggle
@@ -244,13 +286,6 @@ function bindEvents() {
     gameState.nextRound();
   });
 
-  el.btnRetryHardcore.addEventListener('click', () => {
-    triggerHaptic(20);
-    sound.playTileClick();
-    el.hardcoreFailModal.classList.add('hidden');
-    gameState.retryHardcoreStage();
-  });
-
   el.btnRestartGame.addEventListener('click', () => {
     triggerHaptic(20);
     sound.playTileClick();
@@ -258,46 +293,45 @@ function bindEvents() {
     gameState.startNewGame();
   });
 
-  // Native Mobile Software Keyboard (Samsung, iPhone, Gboard) Integration
-  const mobileInput = document.getElementById('mobileWordleInput');
-  const wordleBoardCard = document.getElementById('wordleBoardCard');
-  if (wordleBoardCard && mobileInput) {
-    wordleBoardCard.addEventListener('click', () => {
-      mobileInput.focus();
+  // Leaderboard Modal Events
+  if (el.btnLeaderboard) {
+    el.btnLeaderboard.addEventListener('click', () => {
+      triggerHaptic(10);
+      sound.playTileClick();
+      openLeaderboardModal();
+    });
+  }
+  if (el.btnOpenLeaderboardFromClear) {
+    el.btnOpenLeaderboardFromClear.addEventListener('click', () => {
+      triggerHaptic(10);
+      sound.playTileClick();
+      openLeaderboardModal();
+    });
+  }
+  if (el.btnCloseLeaderboard) {
+    el.btnCloseLeaderboard.addEventListener('click', () => {
+      triggerHaptic(10);
+      sound.playTileClick();
+      el.leaderboardModal.classList.add('hidden');
+    });
+  }
+  if (el.leaderboardModal) {
+    el.leaderboardModal.addEventListener('click', (e) => {
+      if (e.target === el.leaderboardModal) el.leaderboardModal.classList.add('hidden');
+    });
+  }
+  if (el.btnSubmitScore) {
+    el.btnSubmitScore.addEventListener('click', handleScoreSubmit);
+  }
+  if (el.leaderboardNicknameInput) {
+    el.leaderboardNicknameInput.addEventListener('change', () => {
+      const v = el.leaderboardNicknameInput.value.trim();
+      if (v) localStorage.setItem(NICKNAME_KEY, v);
+      else el.leaderboardNicknameInput.value = getOrCreateStoredNickname(NICKNAME_KEY);
     });
   }
 
-  if (mobileInput) {
-    mobileInput.addEventListener('input', () => {
-      const val = mobileInput.value;
-      if (!val) return;
-      for (const char of val) {
-        const { cho, jung, jong, isHangul } = decomposeHangul(char);
-        if (isHangul) {
-          if (cho) gameState.typeHardcoreJamo(cho);
-          if (jung) gameState.typeHardcoreJamo(jung);
-          if (jong) gameState.typeHardcoreJamo(jong);
-        } else {
-          const hangulJamos = 'ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅍㅊㅠㅜㅡ';
-          if (hangulJamos.includes(char)) {
-            gameState.typeHardcoreJamo(char);
-          }
-        }
-      }
-      mobileInput.value = '';
-    });
-
-    mobileInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleHardcoreSubmit();
-      } else if (e.key === 'Backspace') {
-        gameState.deleteHardcoreJamo();
-      }
-    });
-  }
-
-  // Global Keyboard Shortcuts (Full Physical Keyboard support for QWERTY & Korean)
+  // Global Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
@@ -305,87 +339,31 @@ function bindEvents() {
       if (e.key === 'Enter') el.btnNextRound.click();
       return;
     }
-    if (!el.hardcoreFailModal.classList.contains('hidden')) {
-      if (e.key === 'Enter') el.btnRetryHardcore.click();
-      return;
-    }
     if (!el.gameOverModal.classList.contains('hidden')) {
       if (e.key === 'Enter') el.btnRestartGame.click();
       return;
     }
 
-    // Normal Mode Shortcuts
-    if (gameState.gameMode === 'normal') {
-      if (e.key === 'Enter') {
-        if (gameState.canSubmit()) handleSubmitGuess();
-      } else if (e.key >= '1' && e.key <= '9') {
-        const idx = parseInt(e.key, 10) - 1;
-        if (idx < gameState.activeTiles.length) {
-          triggerHaptic(15);
-          sound.playTileClick();
-          gameState.selectTile(idx);
-        }
-      } else if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') {
-        if (gameState.selectedTileIndex !== null) {
-          triggerHaptic(12);
-          sound.playTileRotate();
-          gameState.rotateTileAt(gameState.selectedTileIndex);
-        }
-      } else if (e.code === 'Space') {
-        e.preventDefault();
+    if (e.key === 'Enter') {
+      if (gameState.canSubmit()) handleSubmitGuess();
+    } else if (e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx < gameState.activeTiles.length) {
         triggerHaptic(15);
-        sound.playTileRotate();
-        gameState.shuffleTiles();
-      }
-    }
-    // Hardcore Mode Keyboard Support
-    else if (gameState.gameMode === 'hardcore') {
-      if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
-        highlightActionKey('key-submit');
-        handleHardcoreSubmit();
-      } else if (e.key === 'Backspace' || e.code === 'Backspace' || e.key === 'Delete' || e.code === 'Delete') {
-        highlightActionKey('key-delete');
-        triggerHaptic(10);
         sound.playTileClick();
-        gameState.deleteHardcoreJamo();
-      } else {
-        let jamosToType = [];
-
-        if (e.shiftKey && SHIFT_CODE_TO_HANGUL[e.code]) {
-          const shiftJamo = SHIFT_CODE_TO_HANGUL[e.code];
-          if (shiftJamo === 'ㄲ') jamosToType = ['ㄱ', 'ㄱ'];
-          else if (shiftJamo === 'ㄸ') jamosToType = ['ㄷ', 'ㄷ'];
-          else if (shiftJamo === 'ㅃ') jamosToType = ['ㅂ', 'ㅂ'];
-          else if (shiftJamo === 'ㅆ') jamosToType = ['ㅅ', 'ㅅ'];
-          else if (shiftJamo === 'ㅉ') jamosToType = ['ㅈ', 'ㅈ'];
-          else if (shiftJamo === 'ㅒ') jamosToType = ['ㅑ', 'ㅣ'];
-          else if (shiftJamo === 'ㅖ') jamosToType = ['ㅕ', 'ㅣ'];
-          else jamosToType = [shiftJamo];
-        } else if (CODE_TO_HANGUL[e.code]) {
-          jamosToType = [CODE_TO_HANGUL[e.code]];
-        } else if (e.key && e.key.length === 1) {
-          const { cho, jung, jong, isHangul } = decomposeHangul(e.key);
-          if (isHangul) {
-            if (cho) jamosToType.push(cho);
-            if (jung) jamosToType.push(jung);
-            if (jong) jamosToType.push(jong);
-          } else {
-            const hangulJamos = 'ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅍㅊㅠㅜㅡ';
-            if (hangulJamos.includes(e.key)) {
-              jamosToType = [e.key];
-            }
-          }
-        }
-
-        if (jamosToType.length > 0) {
-          jamosToType.forEach(jamo => {
-            highlightKeypadButton(jamo);
-            triggerHaptic(10);
-            sound.playTileClick();
-            gameState.typeHardcoreJamo(jamo);
-          });
-        }
+        gameState.selectTile(idx);
       }
+    } else if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') {
+      if (gameState.selectedTileIndex !== null) {
+        triggerHaptic(12);
+        sound.playTileRotate();
+        gameState.rotateTileAt(gameState.selectedTileIndex);
+      }
+    } else if (e.code === 'Space') {
+      e.preventDefault();
+      triggerHaptic(15);
+      sound.playTileRotate();
+      gameState.shuffleTiles();
     }
   });
 }
@@ -407,7 +385,6 @@ function updateSoundIcon() {
 function render(state) {
   if (!state.currentPuzzle) return;
 
-  // Header Stage & Difficulty
   el.roundNumber.textContent = state.stageIndex + 1;
   el.scoreVal.textContent = `${state.score}점`;
 
@@ -415,29 +392,21 @@ function render(state) {
   el.difficultyPill.textContent = level;
   el.difficultyPill.className = `difficulty-pill diff-${level}`;
 
-  // Mode Switcher Active Tab Toggle
-  if (state.gameMode === 'normal') {
-    el.btnModeNormal.classList.add('active');
-    el.btnModeHardcore.classList.remove('active');
-    el.normalModeView.classList.remove('hidden');
-    el.hardcoreModeView.classList.add('hidden');
-    renderNormalMode(state);
-  } else {
-    el.btnModeNormal.classList.remove('active');
-    el.btnModeHardcore.classList.add('active');
-    el.normalModeView.classList.add('hidden');
-    el.hardcoreModeView.classList.remove('hidden');
-    renderHardcoreMode(state);
-  }
+  syncUrlWithStage(state.stageIndex);
+  renderNormalMode(state);
 }
-
-/* =========================================================================
-   NORMAL MODE RENDER
-   ========================================================================= */
 
 function renderNormalMode(state) {
   el.targetDesc.textContent = `${state.currentPuzzle.length}글자 (${state.currentPuzzle.targetTiles.length}개 타일)`;
   el.stageHintText.textContent = getWordChosungHint(state.currentPuzzle.answer);
+
+  if (state.hintUsed) {
+    el.stageHintBox.classList.remove('hidden');
+    el.btnToggleHint.title = '초성 힌트 확인 (사용됨 -1점)';
+  } else {
+    el.stageHintBox.classList.add('hidden');
+    el.btnToggleHint.title = '초성 힌트 확인 (사용 시 -1점)';
+  }
 
   renderAssembledPreview(state);
   renderTilesTrack(state);
@@ -473,18 +442,12 @@ function renderAssembledPreview(state) {
   }
 }
 
-/**
- * Clear drag highlight classes from all tile cards
- */
 function clearInsertionStyles() {
   document.querySelectorAll('.draggable-tile-card').forEach(c => {
     c.classList.remove('dragging', 'drag-over', 'insert-left', 'insert-right');
   });
 }
 
-/**
- * Calculate the target placement based on cursor / touch coordinates.
- */
 function getDropPlacement(clientX, clientY, draggedIndex) {
   const cards = Array.from(document.querySelectorAll('.draggable-tile-card'));
   if (cards.length === 0 || draggedIndex === null) return null;
@@ -507,31 +470,18 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
   const firstRect = firstCard.getBoundingClientRect();
   const lastRect = lastCard.getBoundingClientRect();
 
-  // 1. Clearly before first card -> insert at 0
   if (clientY <= firstRect.bottom + 10 && clientX < firstRect.left + 20) {
-    return {
-      targetCard: firstCard,
-      cardIndex: 0,
-      insertSide: 'left',
-      toIndex: 0
-    };
+    return { targetCard: firstCard, cardIndex: 0, insertSide: 'left', toIndex: 0 };
   }
 
-  // 2. Clearly after last card -> insert at last index
   if (
     (clientY >= lastRect.top - 15 && clientX > lastRect.right - 20) ||
     clientY > lastRect.bottom + 5
   ) {
     const lastIndex = cards.length - 1;
-    return {
-      targetCard: lastCard,
-      cardIndex: lastIndex,
-      insertSide: 'right',
-      toIndex: lastIndex
-    };
+    return { targetCard: lastCard, cardIndex: lastIndex, insertSide: 'right', toIndex: lastIndex };
   }
 
-  // 3. Direct card hover
   const elemBelow = document.elementFromPoint(clientX, clientY);
   const directCard = elemBelow ? elemBelow.closest('.draggable-tile-card') : null;
 
@@ -539,12 +489,7 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
     const cardIndex = parseInt(directCard.getAttribute('data-index'), 10);
     const rect = directCard.getBoundingClientRect();
     const isRight = clientX > (rect.left + rect.width / 2);
-    let toIndex;
-    if (!isRight) {
-      toIndex = draggedIndex < cardIndex ? cardIndex - 1 : cardIndex;
-    } else {
-      toIndex = draggedIndex < cardIndex ? cardIndex : cardIndex + 1;
-    }
+    let toIndex = !isRight ? (draggedIndex < cardIndex ? cardIndex - 1 : cardIndex) : (draggedIndex < cardIndex ? cardIndex : cardIndex + 1);
 
     return {
       targetCard: directCard,
@@ -554,7 +499,6 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
     };
   }
 
-  // 4. Proximity fallback
   let closestCard = null;
   let minDistance = Infinity;
 
@@ -573,12 +517,7 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
     const cardIndex = parseInt(closestCard.getAttribute('data-index'), 10);
     const rect = closestCard.getBoundingClientRect();
     const isRight = clientX > (rect.left + rect.width / 2);
-    let toIndex;
-    if (!isRight) {
-      toIndex = draggedIndex < cardIndex ? cardIndex - 1 : cardIndex;
-    } else {
-      toIndex = draggedIndex < cardIndex ? cardIndex : cardIndex + 1;
-    }
+    let toIndex = !isRight ? (draggedIndex < cardIndex ? cardIndex - 1 : cardIndex) : (draggedIndex < cardIndex ? cardIndex : cardIndex + 1);
 
     return {
       targetCard: closestCard,
@@ -591,18 +530,25 @@ function getDropPlacement(clientX, clientY, draggedIndex) {
   return null;
 }
 
-/**
- * Render Draggable Unified Tile Row
- */
 function renderTilesTrack(state) {
   el.tilesTrack.innerHTML = '';
+
+  const lastGuess = state.guesses && state.guesses.length > 0 ? state.guesses[state.guesses.length - 1] : null;
+  const isMatchLastGuess = lastGuess && lastGuess.tiles &&
+    lastGuess.tiles.length === state.activeTiles.length &&
+    lastGuess.tiles.every((c, i) => c === state.activeTiles[i].char);
 
   state.activeTiles.forEach((tile, index) => {
     const card = document.createElement('div');
     const isSelected = state.selectedTileIndex === index;
     const canRotate = isRotatable(tile.char);
 
-    card.className = `draggable-tile-card ${isSelected ? 'selected' : ''}`;
+    let statusClass = '';
+    if (isMatchLastGuess && lastGuess.feedback && lastGuess.feedback[index]) {
+      statusClass = `status-${lastGuess.feedback[index]}`;
+    }
+
+    card.className = `draggable-tile-card ${isSelected ? 'selected' : ''} ${statusClass}`.trim();
     card.setAttribute('draggable', 'true');
     card.setAttribute('data-index', String(index));
 
@@ -612,7 +558,6 @@ function renderTilesTrack(state) {
       ${canRotate ? '<button class="tile-rotate-btn" title="타일 회전 (🔄)" aria-label="회전">🔄</button>' : ''}
     `;
 
-    // Rotate Button
     if (canRotate) {
       const rotateBtn = card.querySelector('.tile-rotate-btn');
       const handleRotate = (e) => {
@@ -626,7 +571,6 @@ function renderTilesTrack(state) {
       rotateBtn.addEventListener('touchend', handleRotate);
     }
 
-    // Tap / Click to select and swap
     card.addEventListener('click', (e) => {
       if (e.target.closest('.tile-rotate-btn')) return;
       triggerHaptic(15);
@@ -634,7 +578,6 @@ function renderTilesTrack(state) {
       gameState.selectTile(index);
     });
 
-    // Touch Event Handling for Mobile Drag & Drop
     card.addEventListener('touchstart', (e) => {
       if (e.target.closest('.tile-rotate-btn')) return;
       const touch = e.touches[0];
@@ -679,7 +622,6 @@ function renderTilesTrack(state) {
       touchActiveTile = null;
     });
 
-    // HTML5 Desktop Drag and Drop Events
     card.addEventListener('dragstart', (e) => {
       draggedIndex = index;
       card.classList.add('dragging');
@@ -734,13 +676,20 @@ function handleSubmitGuess() {
   triggerHaptic(30);
   if (guessEntry.isExactMatch) {
     sound.playRoundWin();
+    // Automatically submit score to Supabase background
+    autoSubmitScoreToLeaderboard();
   } else {
     sound.playTileCombine();
   }
 }
 
 function renderHistory(state) {
-  el.historyCount.textContent = `${state.guesses.length}회 제출`;
+  const attempts = state.guesses.length;
+  let penaltyBadge = '';
+  if (attempts > 5) {
+    penaltyBadge = ' <span class="penalty-badge" title="5회 초과 시 -1점 감점">⚠️ 5회 초과 (-1점)</span>';
+  }
+  el.historyCount.innerHTML = `${attempts}회 제출${penaltyBadge}`;
 
   if (state.guesses.length === 0) {
     el.historyList.innerHTML = `
@@ -759,8 +708,7 @@ function renderHistory(state) {
   recentGuesses.forEach((entry) => {
     const attemptNum = state.guesses.indexOf(entry) + 1;
     const row = document.createElement('div');
-    const isNew = !entry.hasAnimated;
-    row.className = `history-item ${isNew ? 'new-history-entry' : ''}`;
+    row.className = 'history-item';
 
     const tilesHtml = entry.tiles.map((tile, i) => {
       const status = entry.feedback[i];
@@ -770,8 +718,6 @@ function renderHistory(state) {
         </div>
       `;
     }).join('');
-
-    entry.hasAnimated = true;
 
     row.innerHTML = `
       <span class="history-attempt-num">#${attemptNum}</span>
@@ -784,274 +730,208 @@ function renderHistory(state) {
   });
 }
 
-/* =========================================================================
-   HARDCORE WORDLE MODE RENDER
-   ========================================================================= */
-
-function renderHardcoreMode(state) {
-  const numLetters = state.currentPuzzle.length;
-  const numTiles = state.currentPuzzle.targetTiles.length;
-  el.hardcoreTargetDesc.textContent = `${numLetters}글자 (${numTiles}개 타일 추리)`;
-  el.hardcoreAttemptCount.textContent = `시도 ${Math.min(state.hardcoreGuesses.length + 1, 6)} / 6`;
-  el.hardcoreHintText.textContent = getWordChosungHint(state.currentPuzzle.answer);
-
-  renderWordleGrid(state);
-  renderWordleKeypad(state);
-
-  // Check victory / failure conditions
-  if (state.hardcoreIsRoundOver) {
-    const lastGuess = state.hardcoreGuesses[state.hardcoreGuesses.length - 1];
-    if (lastGuess && lastGuess.isExactMatch && el.roundClearModal.classList.contains('hidden')) {
-      showRoundClearModal(state, true);
-    } else if (state.hardcoreGuesses.length >= 6 && !lastGuess.isExactMatch && el.hardcoreFailModal.classList.contains('hidden')) {
-      showHardcoreFailModal(state);
-    }
-  }
-}
-
-function renderWordleGrid(state) {
-  el.wordleGrid.innerHTML = '';
-  const numTiles = state.currentPuzzle.targetTiles.length;
-  const currentTypedTiles = state.hardcoreInputJamos || [];
-  const numGuesses = state.hardcoreGuesses.length;
-
-  for (let r = 0; r < 6; r++) {
-    const row = document.createElement('div');
-    row.className = 'wordle-row';
-    row.id = `wordleRow-${r}`;
-
-    if (r < numGuesses) {
-      // Completed Guess Row (Tile-based)
-      const guess = state.hardcoreGuesses[r];
-      const guessTiles = Array.isArray(guess.tiles) ? guess.tiles : [];
-      for (let c = 0; c < numTiles; c++) {
-        const tile = document.createElement('div');
-        const status = (guess.feedback && guess.feedback[c]) || 'absent';
-        tile.className = `wordle-tile status-${status}`;
-        tile.textContent = guessTiles[c] || '';
-        row.appendChild(tile);
-      }
-    } else if (r === numGuesses && !state.hardcoreIsRoundOver) {
-      // Active In-Progress Row (Tile-based)
-      for (let c = 0; c < numTiles; c++) {
-        const tile = document.createElement('div');
-        const char = currentTypedTiles[c] || '';
-        const isCursor = c === currentTypedTiles.length;
-        tile.className = `wordle-tile ${char ? 'filled' : ''} ${isCursor ? 'active-cursor' : ''}`;
-        tile.textContent = char;
-        row.appendChild(tile);
-      }
-    } else {
-      // Empty Future Row
-      for (let c = 0; c < numTiles; c++) {
-        const tile = document.createElement('div');
-        tile.className = 'wordle-tile';
-        tile.textContent = '';
-        row.appendChild(tile);
-      }
-    }
-
-    el.wordleGrid.appendChild(row);
-  }
-}
-
-function renderWordleKeypad(state) {
-  el.wordleKeypad.innerHTML = '';
-
-  KEYPAD_ROWS.forEach(rowKeys => {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'key-row';
-
-    rowKeys.forEach(key => {
-      const btn = document.createElement('button');
-      if (key === 'ENTER') {
-        btn.className = 'wordle-key key-action key-submit';
-        btn.innerHTML = '↵ 제출';
-
-        const handleSubmit = (e) => {
-          if (e.type === 'touchstart') e.preventDefault();
-          highlightActionKey('key-submit');
-          handleHardcoreSubmit();
-        };
-        btn.addEventListener('touchstart', handleSubmit, { passive: false });
-        btn.addEventListener('click', handleSubmit);
-      } else if (key === 'BACKSPACE') {
-        btn.className = 'wordle-key key-action key-delete';
-        btn.innerHTML = '⌫';
-
-        const handleDelete = (e) => {
-          if (e.type === 'touchstart') e.preventDefault();
-          highlightActionKey('key-delete');
-          triggerHaptic(12);
-          sound.playTileClick();
-          gameState.deleteHardcoreJamo();
-        };
-        btn.addEventListener('touchstart', handleDelete, { passive: false });
-        btn.addEventListener('click', handleDelete);
-      } else {
-        const status = state.hardcoreKeyStates[key];
-        btn.className = `wordle-key ${status ? 'key-' + status : ''}`;
-        btn.textContent = key;
-        btn.setAttribute('data-key', key);
-
-        const handleType = (e) => {
-          if (e.type === 'touchstart') e.preventDefault();
-          highlightKeypadButton(key);
-          triggerHaptic(12);
-          sound.playTileClick();
-          gameState.typeHardcoreJamo(key);
-        };
-        btn.addEventListener('touchstart', handleType, { passive: false });
-        btn.addEventListener('click', handleType);
-      }
-      rowEl.appendChild(btn);
-    });
-
-    el.wordleKeypad.appendChild(rowEl);
-  });
-}
-
-function handleHardcoreSubmit() {
-  const numTiles = gameState.currentPuzzle.targetTiles.length;
-
-  if (gameState.hardcoreInputJamos.length !== numTiles) {
-    // Shake active row
-    const activeRowIndex = gameState.hardcoreGuesses.length;
-    const rowEl = document.getElementById(`wordleRow-${activeRowIndex}`);
-    if (rowEl) {
-      rowEl.classList.remove('row-shake');
-      void rowEl.offsetWidth; // trigger reflow
-      rowEl.classList.add('row-shake');
-    }
-    triggerHaptic([40, 40, 40]);
-    return;
-  }
-
-  const guessEntry = gameState.submitHardcoreGuess();
-  if (!guessEntry) return;
-
-  triggerHaptic(30);
-  if (guessEntry.isExactMatch) {
-    sound.playRoundWin();
-  } else {
-    sound.playTileCombine();
-  }
-}
-
-function showHardcoreFailModal(state) {
-  triggerHaptic([60, 60, 60]);
-  el.hardcoreFailWord.textContent = `정답 단어: "${state.currentPuzzle.answer}"`;
-  el.hardcoreFailModal.classList.remove('hidden');
-}
-
-/* =========================================================================
-   COMMON MODALS & STAGE SELECT
-   ========================================================================= */
-
 function renderStageSelectGrid() {
   el.stagesGrid.innerHTML = '';
 
-  STAGES_100.forEach((stage, idx) => {
-    if (currentStageFilter !== 'all' && stage.level !== currentStageFilter) return;
+  STAGES_100.forEach((stage, index) => {
+    if (currentStageFilter !== 'all' && stage.level !== currentStageFilter) {
+      return;
+    }
 
-    const isCurrent = gameState.stageIndex === idx;
-    const isCleared = gameState.clearedStages && gameState.clearedStages.includes(idx);
+    const isCleared = gameState.clearedStages.includes(index);
+    const isCurrent = gameState.stageIndex === index;
 
-    const btn = document.createElement('button');
-    btn.className = `stage-card-btn ${isCurrent ? 'current' : ''} ${isCleared ? 'cleared' : ''}`;
-    btn.innerHTML = `
-      <span class="stage-card-num">${stage.stage}단계 ${isCleared ? '<span class="stage-cleared-badge">✓</span>' : ''}</span>
-      <span class="stage-card-len">${stage.length}글자</span>
-      <span class="stage-card-diff diff-${stage.level}">${stage.level}</span>
+    const card = document.createElement('div');
+    card.className = `stage-card ${isCleared ? 'cleared' : ''} ${isCurrent ? 'current' : ''}`;
+    card.innerHTML = `
+      <span class="num">${index + 1}</span>
+      <span class="level-tag">${stage.level}</span>
     `;
 
-    btn.addEventListener('click', () => {
+    card.addEventListener('click', () => {
       triggerHaptic(15);
       sound.playTileClick();
-      gameState.loadStage(idx);
+      gameState.loadStage(index, true);
       el.stageSelectModal.classList.add('hidden');
     });
 
-    el.stagesGrid.appendChild(btn);
+    el.stagesGrid.appendChild(card);
   });
 }
 
-function showRoundClearModal(state, isHardcore = false) {
-  triggerHaptic([50, 60, 50, 60, 100]);
-  triggerConfetti();
-
-  const points = (state.currentPuzzle.points || state.currentPuzzle.length) * (isHardcore ? 2 : 1);
-  el.roundClearTitle.textContent = isHardcore ? '🔥 하드코어 워들 클리어!' : '🎉 정답입니다!';
+function showRoundClearModal(state) {
+  el.roundClearTitle.textContent = '정답입니다!';
   el.roundClearWord.textContent = `정답: ${state.currentPuzzle.answer}`;
-  el.awardedPoints.textContent = `+${points}점 ${isHardcore ? '(2배 보너스)' : ''}`;
 
+  const earned = state.lastEarnedPoints || (state.currentPuzzle.points || state.currentPuzzle.length);
+  const details = state.lastPenaltyDetails;
+
+  let breakdownText = '';
+  if (details) {
+    const parts = [`기본 +${details.basePoints}점`];
+    if (details.hintPenalty) parts.push(`힌트 -1점`);
+    if (details.attemptPenalty) parts.push(`5회 초과 -1점`);
+    breakdownText = parts.join(' · ');
+  } else {
+    breakdownText = `기본 +${earned}점`;
+  }
+
+  el.awardedPoints.innerHTML = `+${earned}점 <span class="points-breakdown">(${breakdownText})</span>`;
   el.roundClearModal.classList.remove('hidden');
+  autoSubmitScoreToLeaderboard();
 }
 
 function showGameOverModal(state) {
-  triggerHaptic([100, 50, 100, 50, 200]);
-  triggerConfetti(true);
   el.finalScoreText.textContent = `${state.score}점`;
   el.gameOverModal.classList.remove('hidden');
+  autoSubmitScoreToLeaderboard();
 }
 
-function triggerConfetti(extended = false) {
-  const canvas = el.confettiCanvas;
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+/* =========================================================================
+   Leaderboard / Supabase Integration
+   ========================================================================= */
 
-  const particles = [];
-  const count = extended ? 120 : 60;
-  const colors = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#fbbf24', '#f43f5e'];
+function lbHeaders() {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+  };
+}
 
-  for (let i = 0; i < count; i++) {
-    particles.push({
-      x: canvas.width / 2,
-      y: canvas.height / 2,
-      vx: (Math.random() - 0.5) * 16,
-      vy: (Math.random() - 0.7) * 16,
-      size: Math.random() * 8 + 4,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      rotation: Math.random() * 360,
-      vRot: (Math.random() - 0.5) * 10,
-      opacity: 1
-    });
-  }
+async function fetchLeaderboard() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/card_chess_leaderboard?nickname=like.wordgame:*&select=id,nickname,rating,wins,updated_at&order=rating.desc,updated_at.asc&limit=20`,
+    { headers: lbHeaders() }
+  );
+  if (!res.ok) throw new Error('리더보드를 불러오지 못했습니다');
+  const rows = await res.json();
+  return rows.map(r => ({
+    id: r.id,
+    nickname: (r.nickname || '').replace(/^wordgame:/, ''),
+    score: r.rating || 0,
+    cleared_stages: r.wins || 0,
+    created_at: r.updated_at
+  }));
+}
 
-  let startTime = performance.now();
-  const duration = extended ? 3000 : 1800;
+async function submitScoreToSupabase(nickname, score, clearedStagesCount) {
+  const dbNick = 'wordgame:' + nickname;
+  const fetchRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/card_chess_leaderboard?nickname=eq.${encodeURIComponent(dbNick)}`,
+    { headers: lbHeaders() }
+  );
+  const existing = await fetchRes.json();
 
-  function animate(now) {
-    const elapsed = now - startTime;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    particles.forEach(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.35; // gravity
-      p.rotation += p.vRot;
-      p.opacity = Math.max(0, 1 - (elapsed / duration));
-
-      ctx.save();
-      ctx.globalAlpha = p.opacity;
-      ctx.translate(p.x, p.y);
-      ctx.rotate((p.rotation * Math.PI) / 180);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-      ctx.restore();
-    });
-
-    if (elapsed < duration) {
-      requestAnimationFrame(animate);
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (Array.isArray(existing) && existing.length > 0) {
+    const cur = existing[0];
+    if (score > cur.rating || clearedStagesCount > cur.wins) {
+      const patchRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/card_chess_leaderboard?id=eq.${cur.id}`,
+        {
+          method: 'PATCH',
+          headers: Object.assign({}, lbHeaders(), { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            rating: Math.max(score, cur.rating),
+            wins: Math.max(clearedStagesCount, cur.wins),
+            updated_at: new Date().toISOString()
+          })
+        }
+      );
+      if (!patchRes.ok) throw new Error('점수 갱신 실패');
     }
+  } else {
+    const postRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/card_chess_leaderboard`,
+      {
+        method: 'POST',
+        headers: Object.assign({}, lbHeaders(), {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal'
+        }),
+        body: JSON.stringify({
+          nickname: dbNick,
+          rating: score,
+          wins: clearedStagesCount
+        })
+      }
+    );
+    if (!postRes.ok) throw new Error('점수 등록 실패');
   }
-
-  requestAnimationFrame(animate);
 }
 
-// Start Application
-window.addEventListener('DOMContentLoaded', init);
+async function autoSubmitScoreToLeaderboard() {
+  const nickname = localStorage.getItem(NICKNAME_KEY) || getOrCreateStoredNickname(NICKNAME_KEY);
+  if (!nickname || gameState.score <= 0) return;
+
+  try {
+    await submitScoreToSupabase(nickname, gameState.score, gameState.clearedStages.length);
+  } catch (e) {
+    console.warn('Auto score submission failed silently:', e);
+  }
+}
+
+async function openLeaderboardModal() {
+  el.leaderboardModal.classList.remove('hidden');
+  if (el.leaderboardStatusMsg) el.leaderboardStatusMsg.textContent = '⚡ 최신 점수 자동 등록 중...';
+  await autoSubmitScoreToLeaderboard();
+  if (el.leaderboardStatusMsg) el.leaderboardStatusMsg.textContent = '';
+  await loadLeaderboardUI();
+}
+
+async function loadLeaderboardUI() {
+  if (!el.leaderboardList) return;
+  el.leaderboardList.innerHTML = '<div class="empty-history-placeholder">불러오는 중...</div>';
+
+  try {
+    const rows = await fetchLeaderboard();
+    if (!rows || rows.length === 0) {
+      el.leaderboardList.innerHTML = '<div class="empty-history-placeholder">아직 등록된 랭킹 기록이 없습니다.</div>';
+      return;
+    }
+
+    const currentNick = localStorage.getItem(NICKNAME_KEY) || '';
+
+    el.leaderboardList.innerHTML = rows.map((r, idx) => {
+      const rank = idx + 1;
+      const rankClass = rank <= 3 ? `top-${rank}` : '';
+      const isMe = r.nickname === currentNick;
+
+      return `
+        <div class="lb-row-item ${isMe ? 'my-row' : ''}">
+          <span class="lb-rank ${rankClass}">${rank}</span>
+          <span class="lb-nick">${r.nickname}</span>
+          <span class="lb-score">${r.score || 0}점</span>
+          <span class="lb-stages">${r.cleared_stages || 0}단계</span>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    el.leaderboardList.innerHTML = '<div class="empty-history-placeholder">랭킹 정보를 가져오지 못했습니다.</div>';
+  }
+}
+
+async function handleScoreSubmit() {
+  const nickname = el.leaderboardNicknameInput.value.trim() || getOrCreateStoredNickname(NICKNAME_KEY);
+  localStorage.setItem(NICKNAME_KEY, nickname);
+
+  if (gameState.score <= 0) {
+    if (el.leaderboardStatusMsg) el.leaderboardStatusMsg.textContent = '1단계 이상 클리어해야 점수를 등록할 수 있습니다.';
+    return;
+  }
+
+  el.btnSubmitScore.disabled = true;
+  if (el.leaderboardStatusMsg) el.leaderboardStatusMsg.textContent = '등록 중...';
+
+  try {
+    await submitScoreToSupabase(nickname, gameState.score, gameState.clearedStages.length);
+    if (el.leaderboardStatusMsg) el.leaderboardStatusMsg.textContent = '✅ 점수가 성공적으로 등록되었습니다!';
+    await loadLeaderboardUI();
+  } catch (e) {
+    if (el.leaderboardStatusMsg) el.leaderboardStatusMsg.textContent = '점수 등록에 실패했습니다. 다시 시도해 주세요.';
+  } finally {
+    el.btnSubmitScore.disabled = false;
+  }
+}
+
+// Start App
+init();
