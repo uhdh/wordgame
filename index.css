@@ -200,6 +200,15 @@ button {
 .difficulty-pill.diff-어려움 { background: rgba(211, 178, 99, 0.2); color: #d3b263; }
 .difficulty-pill.diff-최고난도 { background: rgba(201, 106, 99, 0.2); color: #c96a63; }
 
+.set-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(154, 138, 201, 0.2);
+  color: #9a8ac9;
+}
+
 .score-pill {
   display: flex;
   align-items: center;
@@ -861,12 +870,17 @@ button {
 .bg-red { background: var(--color-red); color: #fff; }
 
 /* Stage Select Modal */
-.stage-filter-tabs {
+.stage-filter-tabs,
+.stage-set-tabs {
   display: flex;
   align-items: center;
   gap: 4px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.stage-set-tabs {
+  margin-bottom: 6px;
 }
 
 .tab-btn {

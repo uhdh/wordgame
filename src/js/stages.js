@@ -114,20 +114,148 @@ const RAW_100_WORDS = [
   { word: '지구온난화방지책', level: '최고난도' }
 ];
 
+// 지하철역 테마 100 Stages (101 ~ 200) - 실제 수도권/부산 전철역 이름(역 접미사 제외)
+const RAW_SUBWAY_100_WORDS = [
+  // === 3글자 (쉬움) ===
+  { word: '왕십리', level: '쉬움' },
+  { word: '낙성대', level: '쉬움' },
+  { word: '신도림', level: '쉬움' },
+  { word: '충정로', level: '쉬움' },
+  { word: '신설동', level: '쉬움' },
+  { word: '까치산', level: '쉬움' },
+  { word: '구파발', level: '쉬움' },
+  { word: '연신내', level: '쉬움' },
+  { word: '독립문', level: '쉬움' },
+  { word: '경복궁', level: '쉬움' },
+  { word: '압구정', level: '쉬움' },
+  { word: '학여울', level: '쉬움' },
+  { word: '여의도', level: '쉬움' },
+  { word: '서대문', level: '쉬움' },
+  { word: '광화문', level: '쉬움' },
+  { word: '답십리', level: '쉬움' },
+  { word: '장한평', level: '쉬움' },
+  { word: '광나루', level: '쉬움' },
+  { word: '상일동', level: '쉬움' },
+  { word: '둔촌동', level: '쉬움' },
+  { word: '도봉산', level: '쉬움' },
+  { word: '수락산', level: '쉬움' },
+  { word: '사가정', level: '쉬움' },
+  { word: '용마산', level: '쉬움' },
+  { word: '보라매', level: '쉬움' },
+  { word: '노량진', level: '쉬움' },
+  { word: '이태원', level: '쉬움' },
+  { word: '한강진', level: '쉬움' },
+  { word: '동묘앞', level: '쉬움' },
+  { word: '고려대', level: '쉬움' },
+  { word: '화랑대', level: '쉬움' },
+  { word: '봉화산', level: '쉬움' },
+  { word: '서울숲', level: '쉬움' },
+  { word: '개포동', level: '쉬움' },
+  { word: '가천대', level: '쉬움' },
+
+  // === 4글자 (보통) ===
+  { word: '상왕십리', level: '보통' },
+  { word: '건대입구', level: '보통' },
+  { word: '잠실나루', level: '보통' },
+  { word: '잠실새내', level: '보통' },
+  { word: '홍대입구', level: '보통' },
+  { word: '양천구청', level: '보통' },
+  { word: '동대입구', level: '보통' },
+  { word: '가락시장', level: '보통' },
+  { word: '경찰병원', level: '보통' },
+  { word: '김포공항', level: '보통' },
+  { word: '여의나루', level: '보통' },
+  { word: '굽은다리', level: '보통' },
+  { word: '태릉입구', level: '보통' },
+  { word: '강남구청', level: '보통' },
+  { word: '장승배기', level: '보통' },
+  { word: '부천시청', level: '보통' },
+  { word: '부평구청', level: '보통' },
+  { word: '공항시장', level: '보통' },
+  { word: '마곡나루', level: '보통' },
+  { word: '양천향교', level: '보통' },
+  { word: '삼성중앙', level: '보통' },
+  { word: '석촌고분', level: '보통' },
+  { word: '송파나루', level: '보통' },
+  { word: '한성백제', level: '보통' },
+  { word: '둔촌오륜', level: '보통' },
+  { word: '마포구청', level: '보통' },
+  { word: '버티고개', level: '보통' },
+  { word: '매탄권선', level: '보통' },
+  { word: '수원시청', level: '보통' },
+  { word: '강동구청', level: '보통' },
+  { word: '몽촌토성', level: '보통' },
+  { word: '수지구청', level: '보통' },
+  { word: '광교중앙', level: '보통' },
+
+  // === 5글자 (어려움) ===
+  { word: '을지로입구', level: '어려움' },
+  { word: '종합운동장', level: '어려움' },
+  { word: '서울대입구', level: '어려움' },
+  { word: '영등포구청', level: '어려움' },
+  { word: '신정네거리', level: '어려움' },
+  { word: '고속터미널', level: '어려움' },
+  { word: '남부터미널', level: '어려움' },
+  { word: '영등포시장', level: '어려움' },
+  { word: '올림픽공원', level: '어려움' },
+  { word: '숭실대입구', level: '어려움' },
+  { word: '광명사거리', level: '어려움' },
+  { word: '삼산체육관', level: '어려움' },
+  { word: '국회의사당', level: '어려움' },
+  { word: '효창공원앞', level: '어려움' },
+  { word: '대모산입구', level: '어려움' },
+  { word: '단대오거리', level: '어려움' },
+  { word: '한국항공대', level: '어려움' },
+
+  // === 6~9글자 (최고난도) ===
+  { word: '어린이대공원', level: '최고난도' },
+  { word: '신대방삼거리', level: '최고난도' },
+  { word: '중앙보훈병원', level: '최고난도' },
+  { word: '월드컵경기장', level: '최고난도' },
+  { word: '압구정로데오', level: '최고난도' },
+  { word: '청라국제도시', level: '최고난도' },
+  { word: '공항화물청사', level: '최고난도' },
+  { word: '남한산성입구', level: '최고난도' },
+  { word: '양재시민의숲', level: '최고난도' },
+  { word: '구로디지털단지', level: '최고난도' },
+  { word: '가산디지털단지', level: '최고난도' },
+  { word: '부천종합운동장', level: '최고난도' },
+  { word: '다대포해수욕장', level: '최고난도' },
+  { word: '디지털미디어시티', level: '최고난도' },
+  { word: '동대문역사문화공원', level: '최고난도' }
+];
+
+const RAW_ALL_WORDS = [...RAW_100_WORDS, ...RAW_SUBWAY_100_WORDS];
+
+// 세트 크기: 1~100 = 기본, 101~200 = 지하철역. 세트별 로컬 번호 계산에 사용.
+export const STAGE_SET_SIZE = 100;
+export const STAGE_SETS = [
+  { key: 'basic', label: '기본', start: 0, size: STAGE_SET_SIZE },
+  { key: 'subway', label: '지하철역', start: STAGE_SET_SIZE, size: STAGE_SET_SIZE }
+];
+
+export function getStageSetForIndex(index) {
+  return STAGE_SETS.find(s => index >= s.start && index < s.start + s.size) || STAGE_SETS[0];
+}
+
 /**
- * Generate full puzzle objects for all 100 stages
+ * Generate full puzzle objects for all 200 stages (기본 100 + 지하철역 100)
  */
-export const STAGES_100 = RAW_100_WORDS.map((item, index) => {
+export const STAGES_100 = RAW_ALL_WORDS.map((item, index) => {
   const { word, level } = item;
   const { consonants, vowels } = getWordBaseTiles(word);
-  
+
   // Base tiles pool (consonants + vowels)
   const tiles = [...consonants, ...vowels];
   const targetTiles = decomposeWordToTargetTiles(word);
   const chosungHint = getWordChosungHint(word);
+  const set = getStageSetForIndex(index);
 
   return {
     stage: index + 1,
+    setKey: set.key,
+    setLabel: set.label,
+    localStage: index - set.start + 1,
     title: `${index + 1}단계 (${word.length}글자 단어)`,
     level,
     length: word.length,

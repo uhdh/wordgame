@@ -37,6 +37,7 @@ const el = {
   // Header & Meta
   roundNumber: document.getElementById('roundNumber'),
   difficultyPill: document.getElementById('difficultyPill'),
+  setPill: document.getElementById('setPill'),
   scoreVal: document.getElementById('scoreVal'),
 
   // Game Elements
@@ -60,6 +61,7 @@ const el = {
   btnCloseRules: document.getElementById('btnCloseRules'),
   btnStageSelect: document.getElementById('btnStageSelect'),
   stageSelectModal: document.getElementById('stageSelectModal'),
+  stageSelectTitle: document.getElementById('stageSelectTitle'),
   btnCloseStageSelect: document.getElementById('btnCloseStageSelect'),
   stagesGrid: document.getElementById('stagesGrid'),
   btnSound: document.getElementById('btnSound'),
@@ -97,6 +99,7 @@ let touchStartY = 0;
 let touchActiveTile = null;
 let hasDraggedThisTouch = false;
 let currentStageFilter = 'all';
+let currentStageSet = 'basic';
 
 function triggerHaptic(pattern = 10) {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -176,7 +179,7 @@ function init() {
   const paramStage = urlParams.get('stage') || urlParams.get('s');
   if (paramStage) {
     const parsedStage = parseInt(paramStage, 10);
-    if (!isNaN(parsedStage) && parsedStage >= 1 && parsedStage <= 100) {
+    if (!isNaN(parsedStage) && parsedStage >= 1 && parsedStage <= STAGES_100.length) {
       gameState.stageIndex = parsedStage - 1;
     }
   }
@@ -255,6 +258,10 @@ function bindEvents() {
   el.btnStageSelect.addEventListener('click', () => {
     triggerHaptic(10);
     sound.playTileClick();
+    currentStageSet = gameState.currentPuzzle?.setKey || 'basic';
+    document.querySelectorAll('.stage-set-tabs .tab-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-set') === currentStageSet);
+    });
     renderStageSelectGrid();
     el.stageSelectModal.classList.remove('hidden');
   });
@@ -265,6 +272,18 @@ function bindEvents() {
   });
   el.stageSelectModal.addEventListener('click', (e) => {
     if (e.target === el.stageSelectModal) el.stageSelectModal.classList.add('hidden');
+  });
+
+  // Stage Set Tabs (기본 / 지하철역)
+  document.querySelectorAll('.stage-set-tabs .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      triggerHaptic(10);
+      sound.playTileClick();
+      document.querySelectorAll('.stage-set-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentStageSet = btn.getAttribute('data-set');
+      renderStageSelectGrid();
+    });
   });
 
   // Stage Filter Tabs
@@ -386,12 +405,18 @@ function updateSoundIcon() {
 function render(state) {
   if (!state.currentPuzzle) return;
 
-  el.roundNumber.textContent = state.stageIndex + 1;
+  el.roundNumber.textContent = state.currentPuzzle.localStage || state.stageIndex + 1;
   el.scoreVal.textContent = `${state.score}점`;
 
   const level = state.currentPuzzle.level || '쉬움';
   el.difficultyPill.textContent = level;
   el.difficultyPill.className = `difficulty-pill diff-${level}`;
+
+  if (el.setPill) {
+    const isSubway = state.currentPuzzle.setKey === 'subway';
+    el.setPill.classList.toggle('hidden', !isSubway);
+    if (isSubway) el.setPill.textContent = state.currentPuzzle.setLabel;
+  }
 
   syncUrlWithStage(state.stageIndex);
   renderNormalMode(state);
@@ -732,8 +757,13 @@ function renderHistory(state) {
 
 function renderStageSelectGrid() {
   el.stagesGrid.innerHTML = '';
+  if (el.stageSelectTitle) {
+    const setLabel = currentStageSet === 'subway' ? '지하철역' : '기본';
+    el.stageSelectTitle.textContent = `🗺️ 단계 선택 (${setLabel} 100단계)`;
+  }
 
   STAGES_100.forEach((stage, index) => {
+    if (stage.setKey !== currentStageSet) return;
     if (currentStageFilter !== 'all' && stage.level !== currentStageFilter) {
       return;
     }
@@ -744,7 +774,7 @@ function renderStageSelectGrid() {
     const card = document.createElement('div');
     card.className = `stage-card ${isCleared ? 'cleared' : ''} ${isCurrent ? 'current' : ''}`;
     card.innerHTML = `
-      <span class="num">${index + 1}</span>
+      <span class="num">${stage.localStage}</span>
       <span class="level-tag">${stage.level}</span>
     `;
 
