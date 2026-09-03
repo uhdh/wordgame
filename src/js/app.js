@@ -5,7 +5,7 @@
 import { gameState } from './gameState.js';
 import { sound } from './audioEffects.js';
 import { isRotatable, getWordChosungHint } from './hangulEngine.js';
-import { STAGES_100 } from './stages.js';
+import { STAGES_100, STAGE_SETS } from './stages.js';
 
 // Supabase & Ranking Config
 const SUPABASE_URL = 'https://paktzmofotvwfdxcpmzv.supabase.co';
@@ -254,6 +254,20 @@ function bindEvents() {
     if (e.target === el.rulesModal) el.rulesModal.classList.add('hidden');
   });
 
+  // Set Pill (기본 <-> 지하철역 toggle)
+  if (el.setPill) {
+    el.setPill.addEventListener('click', () => {
+      triggerHaptic(10);
+      sound.playTileClick();
+      const current = gameState.currentPuzzle;
+      if (!current) return;
+      const otherSet = STAGE_SETS.find(s => s.key !== current.setKey) || STAGE_SETS[0];
+      const localStage = current.localStage || 1;
+      const targetIndex = otherSet.start + Math.min(localStage, otherSet.size) - 1;
+      gameState.loadStage(targetIndex, true);
+    });
+  }
+
   // Stage Select Modal
   el.btnStageSelect.addEventListener('click', () => {
     triggerHaptic(10);
@@ -413,9 +427,7 @@ function render(state) {
   el.difficultyPill.className = `difficulty-pill diff-${level}`;
 
   if (el.setPill) {
-    const isSubway = state.currentPuzzle.setKey === 'subway';
-    el.setPill.classList.toggle('hidden', !isSubway);
-    if (isSubway) el.setPill.textContent = state.currentPuzzle.setLabel;
+    el.setPill.textContent = state.currentPuzzle.setLabel;
   }
 
   syncUrlWithStage(state.stageIndex);

@@ -202,11 +202,23 @@ button {
 
 .set-pill {
   font-size: 11px;
-  font-weight: 700;
-  padding: 2px 7px;
+  font-weight: 800;
+  padding: 2px 8px;
   border-radius: var(--radius-full);
-  background: rgba(154, 138, 201, 0.2);
-  color: #9a8ac9;
+  background: #f0ece2;
+  color: #0f0f12;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.12s ease;
+}
+
+.set-pill:hover {
+  opacity: 0.85;
+}
+
+.set-pill:active {
+  opacity: 0.7;
 }
 
 .score-pill {
