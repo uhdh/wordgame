@@ -2,7 +2,7 @@
  * <언어의 조각> Game State Manager (Single 100-Stage Puzzle Mode)
  * Full state persistence, 100 stages, tile-based evaluation.
  */
-import { STAGES_100 } from './stages.js';
+import { STAGES_100, STAGE_SETS, getStageSetForIndex } from './stages.js';
 import { evaluateTileGuess } from './wordValidator.js';
 import { rotateTile, parseTileStreamToSyllables, isRotatable } from './hangulEngine.js';
 
@@ -12,6 +12,9 @@ export class GameState {
     this.score = 0;
     this.clearedStages = [];
     this.savedStageState = null;
+    // 세트(기본/지하철역)별로 마지막으로 플레이하던 단계를 따로 기억한다
+    this.lastStageBySet = {};
+    for (const s of STAGE_SETS) this.lastStageBySet[s.key] = s.start;
 
     this.currentPuzzle = null;
     this.selectedTileIndex = null;
@@ -55,6 +58,14 @@ export class GameState {
         if (data.savedStageState && data.savedStageState.stageIndex === this.stageIndex) {
           this.savedStageState = data.savedStageState;
         }
+        if (data.lastStageBySet && typeof data.lastStageBySet === 'object') {
+          for (const s of STAGE_SETS) {
+            const v = data.lastStageBySet[s.key];
+            if (typeof v === 'number' && v >= s.start && v < s.start + s.size) {
+              this.lastStageBySet[s.key] = v;
+            }
+          }
+        }
       } else {
         const legacyIndex = parseInt(localStorage.getItem('wordgame_stage_index') || '0', 10);
         if (!isNaN(legacyIndex) && legacyIndex >= 0 && legacyIndex < STAGES_100.length) {
@@ -79,6 +90,7 @@ export class GameState {
         stageIndex: this.stageIndex,
         score: this.score,
         clearedStages: this.clearedStages,
+        lastStageBySet: this.lastStageBySet,
         savedStageState: {
           stageIndex: this.stageIndex,
           activeTiles: this.activeTiles,
@@ -123,7 +135,21 @@ export class GameState {
     }
     this.stageIndex = index;
     const stage = STAGES_100[index];
+    this.lastStageBySet[stage.setKey] = index;
     this.loadPuzzle(stage, forceReset);
+  }
+
+  /**
+   * 세트(기본/지하철역)별로 마지막으로 플레이하던 단계 인덱스를 반환한다.
+   * 해당 세트를 아직 방문한 적 없으면 그 세트의 1단계 인덱스를 반환한다.
+   * @param {string} setKey
+   */
+  getLastStageForSet(setKey) {
+    if (typeof this.lastStageBySet[setKey] === 'number') {
+      return this.lastStageBySet[setKey];
+    }
+    const set = STAGE_SETS.find(s => s.key === setKey);
+    return set ? set.start : 0;
   }
 
   /**

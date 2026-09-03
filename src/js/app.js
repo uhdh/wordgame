@@ -38,6 +38,11 @@ const el = {
   roundNumber: document.getElementById('roundNumber'),
   difficultyPill: document.getElementById('difficultyPill'),
   setPill: document.getElementById('setPill'),
+  setSwitchModal: document.getElementById('setSwitchModal'),
+  setSwitchDesc: document.getElementById('setSwitchDesc'),
+  btnConfirmSetSwitch: document.getElementById('btnConfirmSetSwitch'),
+  btnCancelSetSwitch: document.getElementById('btnCancelSetSwitch'),
+  btnCloseSetSwitch: document.getElementById('btnCloseSetSwitch'),
   scoreVal: document.getElementById('scoreVal'),
 
   // Game Elements
@@ -100,6 +105,7 @@ let touchActiveTile = null;
 let hasDraggedThisTouch = false;
 let currentStageFilter = 'all';
 let currentStageSet = 'basic';
+let pendingSetSwitchIndex = null;
 
 function triggerHaptic(pattern = 10) {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -254,7 +260,7 @@ function bindEvents() {
     if (e.target === el.rulesModal) el.rulesModal.classList.add('hidden');
   });
 
-  // Set Pill (기본 <-> 지하철역 toggle)
+  // Set Pill (기본 <-> 지하철역 전환 확인 모달)
   if (el.setPill) {
     el.setPill.addEventListener('click', () => {
       triggerHaptic(10);
@@ -262,9 +268,37 @@ function bindEvents() {
       const current = gameState.currentPuzzle;
       if (!current) return;
       const otherSet = STAGE_SETS.find(s => s.key !== current.setKey) || STAGE_SETS[0];
-      const localStage = current.localStage || 1;
-      const targetIndex = otherSet.start + Math.min(localStage, otherSet.size) - 1;
-      gameState.loadStage(targetIndex, true);
+      const targetIndex = gameState.getLastStageForSet(otherSet.key);
+      const targetLocalStage = targetIndex - otherSet.start + 1;
+
+      pendingSetSwitchIndex = targetIndex;
+      el.setSwitchDesc.textContent =
+        `${current.setLabel} ${current.localStage}단계 → ${otherSet.label} ${targetLocalStage}단계로 이동합니다.`;
+      el.setSwitchModal.classList.remove('hidden');
+    });
+  }
+
+  if (el.btnConfirmSetSwitch) {
+    el.btnConfirmSetSwitch.addEventListener('click', () => {
+      triggerHaptic(15);
+      sound.playTileClick();
+      if (pendingSetSwitchIndex !== null) {
+        gameState.loadStage(pendingSetSwitchIndex, true);
+        pendingSetSwitchIndex = null;
+      }
+      el.setSwitchModal.classList.add('hidden');
+    });
+  }
+
+  const closeSetSwitchModal = () => {
+    pendingSetSwitchIndex = null;
+    el.setSwitchModal.classList.add('hidden');
+  };
+  if (el.btnCancelSetSwitch) el.btnCancelSetSwitch.addEventListener('click', closeSetSwitchModal);
+  if (el.btnCloseSetSwitch) el.btnCloseSetSwitch.addEventListener('click', closeSetSwitchModal);
+  if (el.setSwitchModal) {
+    el.setSwitchModal.addEventListener('click', (e) => {
+      if (e.target === el.setSwitchModal) closeSetSwitchModal();
     });
   }
 
