@@ -322,8 +322,7 @@ export function parseTileStreamToSyllables(tiles) {
 
         if (nextIdx < tiles.length && isConsonant(tiles[nextIdx])) {
           const cons1 = tiles[nextIdx];
-          const hasVowelAfter = (nextIdx + 1 < tiles.length && isVowel(tiles[nextIdx + 1])) ||
-                                (nextIdx + 2 < tiles.length && isConsonant(tiles[nextIdx + 1]) && isVowel(tiles[nextIdx + 2]) && combineTiles([cons1, tiles[nextIdx + 1]]) && CHOSUNG.includes(combineTiles([cons1, tiles[nextIdx + 1]])));
+          const hasVowelAfter = (nextIdx + 1 < tiles.length && isVowel(tiles[nextIdx + 1]));
 
           if (!hasVowelAfter) {
             jong = cons1;

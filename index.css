@@ -475,6 +475,7 @@ button {
   justify-content: center;
   cursor: grab;
   user-select: none;
+  touch-action: none;
   transition: transform 0.12s ease, border-color 0.12s ease;
 }
 
